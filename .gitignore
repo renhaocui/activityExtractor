@@ -1,3 +1,5 @@
 *.iml
 .idea/encodings.xml
 *.xml
+ark-tweet-nlp/*
+data/*
