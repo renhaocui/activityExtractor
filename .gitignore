@@ -3,3 +3,5 @@
 *.xml
 ark-tweet-nlp/*
 data/*
+output.pos
+output.pos
