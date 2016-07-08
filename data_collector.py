@@ -17,7 +17,8 @@ def oauth_login():
     twitter_api = twitter.Twitter(auth=auth)
     return twitter_api
 
-dataFile = open('data', 'w')
+dataFile = open('data', 'a')
+userFile = open('user', 'a')
 #seedWords = ['eating now', 'watching now', 'making now ', 'heading now', 'having now', 'doing now', 'working now']
 
 c_k = '1YjJerf1D5rRvriEzRstKw'
@@ -30,6 +31,7 @@ index = 0
 requestLimit = 180
 requestNum = 0
 idSet = set()
+userIDSet = set()
 while True:
     twitter_api = oauth_login()
     requestNum += 1
@@ -39,9 +41,8 @@ while True:
         requestNum = 1
     try:
         #print "Collecting Tweets: " + str(seedWords[index])
-        print "Collecting Tweets..."
-        tweets = twitter_api.search.tweets(language='en', count=100, include_entities=True,
-                                           q='"now"')
+        print "Collecting Tweets, request num: "+str(requestNum)
+        tweets = twitter_api.search.tweets(language='en', count=100, include_entities=True, q='e')
         #index += 1
         #if index >= size:
         #    index = 0
@@ -64,7 +65,13 @@ while True:
             temp['user_lang'] = tweet['user']['lang']
             temp['user_location'] = tweet['user']['location']
             temp['user_timezone'] = tweet['user']['time_zone']
+            temp['user_name'] = tweet['user']['screen_name']
+            temp['user_id'] = tweet['user']['id']
+            if temp['user_id'] not in userIDSet:
+                userIDSet.add(temp['user_id'])
+                userFile.write(str(temp['user_id'])+'\t'+temp['user_name']+'\n')
             dataFile.write(json.dumps(temp))
             dataFile.write('\n')
 
 dataFile.close()
+userFile.close()
