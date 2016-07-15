@@ -41,7 +41,7 @@ for brand in brandList:
     recordFile = open("followers//" + brand + '.json', 'a')
     cursor = -1
     for i in range(10000):
-        if cursor == 0 or len(followerIDSet) > 50000:
+        if cursor == 0 or len(followerIDSet) > 10000:
             break
         try:
             requestNum += 1
@@ -59,10 +59,10 @@ for brand in brandList:
                     temp['verified'] = data['verified']
                     temp['entities'] = data['entities']
                     temp['description'] = data['description']
-                    temp['follower_count'] = data['follower_count']
+                    temp['followers_count'] = data['followers_count']
                     temp['listed_count'] = data['listed_count']
-                    temp['status'] = data['status']
-                    temp['status_count'] = data['status_count']
+                    #temp['status'] = data['status']
+                    temp['statuses_count'] = data['statuses_count']
                     temp['location'] = data['location']
                     temp['friends_count'] = data['friends_count']
                     temp['screen_name'] = data['screen_name']
