@@ -59,6 +59,7 @@ for brand in brandList:
                 tempOutput = {}
                 tweetIDSet.add(tweet['id'])
                 tempOutput['id'] = tweet['id']
+                tempOutput['coordinates'] = tweet['coordinates']
                 tempOutput['text'] = tweet['text']
                 tempOutput['place'] = tweet['place']
                 tempOutput['entities'] = tweet['entities']
