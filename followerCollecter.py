@@ -1,5 +1,4 @@
 import time
-
 __author__ = 'renhao.cui'
 import json
 import twitter
