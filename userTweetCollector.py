@@ -39,11 +39,11 @@ requestNum = 0
 for brand in brandList:
     print 'Collecting tweets for: '+str(brand)
     tweetIDSet = set()
-    if len(tweetIDSet) > tweetLimit:
-        continue
     followerFile = open('followers/'+brand+'.json', 'r')
     outputFile = open('tweets/'+brand+'.json', 'a')
     for line in followerFile:
+        if len(tweetIDSet) > tweetLimit:
+            break
         temp = json.loads(line)
         userID = temp['id']
         requestNum += 1
