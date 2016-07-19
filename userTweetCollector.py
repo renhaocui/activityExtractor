@@ -26,7 +26,7 @@ def oauth_login():
 
 
 requestLimit = 180
-tweetLimit = 1000
+tweetLimit = 100000
 brandList = []
 listFile = open('brand.list', 'r')
 for line in listFile:
@@ -39,6 +39,8 @@ requestNum = 0
 for brand in brandList:
     print 'Collecting tweets for: '+str(brand)
     tweetIDSet = set()
+    if len(tweetIDSet) > tweetLimit:
+        continue
     followerFile = open('followers/'+brand+'.json', 'r')
     outputFile = open('tweets/'+brand+'.json', 'a')
     for line in followerFile:
