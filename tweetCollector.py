@@ -35,7 +35,11 @@ while True:
         time.sleep(900)
         requestNum = 1
         print 'Collecting...'
-    response = twitter_api.search.tweets(q='e', count=100, result_type='mixed', lang='en', include_entities='true')
+    try:
+        response = twitter_api.search.tweets(q='e', count=100, result_type='mixed', lang='en', include_entities='true')
+    except Exception as e:
+        print 'Error: '+str(e)
+        continue
     for tweet in response['statuses']:
         if tweet['place'] is not None:
             if tweet['place']['place_type'] == 'poi':

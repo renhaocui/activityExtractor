@@ -3,10 +3,10 @@ import time
 import json
 import twitter
 
-c_k = 'R2FZHZcAcHFatakYhKL2cQcVo'
-c_s = 'jwkcIPCkrOBdxKVTVVE7d7cIwH8ZyHHtqxYeCVUZs35Lu4BOkY'
-a_t = '141612471-3UJPl93cGf2XBm2JkBn26VFewzwK3WGN1EiKJi4T'
-a_t_s = 'do1I1vtIvjgQF3vr0ln4pYVbsAj5OZIxuuATXjgBaqUYM'
+c_k = 'wHqszw01omK3W7sNwZC2XgY2e'
+c_s = '2Kmt5CFVG8UikLLKNgTUbertPfxOBHSHaqZDdMZ5T6vgP11iD8'
+a_t = '141612471-rtZFDyJrcaLN96FYpTSRyoCyhMcFySLZCTA2VXXF'
+a_t_s = 'zYUlpJTApBhtgnAP1PpypO8TCofZdqIGb9CZO6o5Z8vUA'
 
 
 def oauth_login():
@@ -26,39 +26,42 @@ def oauth_login():
 
 requestLimit = 180
 placeData = {}
-listFile = open('categoryPlaces.json', 'r')
+listFile = open('categoryPlaces2.json', 'r')
 for line in listFile:
     data = json.loads(line.strip())
     category = data['category']
     id = data['id']
     address = data['address']
     name = data['name']
+    lat = data['lat']
+    lon = data['lon']
     if category not in placeData:
-        placeData[category] = {id: {'address': address, 'name': name}}
+        placeData[category] = {id: {'address': address, 'name': name, 'lat': lat, 'lon': lon}}
     else:
-        placeData[category][id] = {'address': address, 'name': name}
+        placeData[category][id] = {'address': address, 'name': name, 'lat': lat, 'lon': lon}
 listFile.close()
 
 twitter_api = oauth_login()
 requestNum = 0
 outData = {}
-response = twitter_api.search.tweets(q='place:tomtom:712956', result_type='mixed', count=100)
-print response
+#response = twitter_api.search.tweets(q=' ', geocode='35.23569,-88.38866,0.1mi', result_type='mixed', count=100, lang='en')
+#print response
 
-'''
 for category in placeData:
     tweetIDSet = set()
     print 'Collecting for ['+category+']'
     outFile = open('data/' + category + '.json', 'w')
     for id in placeData[category]:
-        print id
         requestNum += 1
-        outFile = open('data/'+category+'.json', 'a')
         if requestNum > requestLimit:
             print 'Wait for 15 mins...'
             time.sleep(900)
             requestNum = 1
-        response = twitter_api.search.tweets(q='place:tomtom:'+str(id), count=100, result_type='mixed')
+        try:
+            response = twitter_api.search.tweets(q=' ', geocode=str(placeData[category][id]['lat'])+','+str(placeData[category][id]['lon'])+','+'0.1mi', count=100, result_type='mixed', lang='en')
+        except Exception as e:
+            print 'Error ' + str(e)
+            continue
         for tweet in response['statuses']:
             if tweet['id'] not in tweetIDSet:
                 temp = {}
@@ -69,6 +72,7 @@ for category in placeData:
                 temp['text'] = tweet['text']
                 temp['retweet_count'] = tweet['retweet_count']
                 temp['place'] = tweet['place']
+                temp['place_name'] = placeData[category][id]['name']
                 temp['place_category'] = category
                 temp['user_location'] = tweet['user']['location']
                 temp['user_id'] = tweet['user']['id']
@@ -76,4 +80,3 @@ for category in placeData:
                 outFile.write(json.dumps(temp)+'\n')
 
     outFile.close()
-'''
