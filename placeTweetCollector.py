@@ -42,7 +42,7 @@ listFile.close()
 twitter_api = oauth_login()
 requestNum = 0
 outData = {}
-response = twitter_api.search.tweets(q='place:12f0133ced57367b')
+response = twitter_api.search.tweets(q='place:tomtom:712956', result_type='mixed', count=100)
 print response
 
 '''

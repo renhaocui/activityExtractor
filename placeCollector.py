@@ -29,7 +29,7 @@ def oauth_login():
 def TwitterPlaceCollector():
     requestLimit = 15
     placeList = []
-    listFile = open('place.category', 'r')
+    listFile = open('places.list', 'r')
     for line in listFile:
         placeList.append(line.strip())
     listFile.close()
@@ -37,27 +37,29 @@ def TwitterPlaceCollector():
     twitter_api = oauth_login()
     requestNum = 0
     placeIDSet = set()
-    recordFile = open('places.json', 'a')
+    recordFile = open('places.json', 'w')
     for place in placeList:
         print 'extracting data for: ' + place
-        try:
-            requestNum += 1
-            if requestNum > requestLimit:
-                print 'Wait for 15 mins...'
-                time.sleep(900)
-                requestNum = 1
-            response = twitter_api.geo.search(query=place, granularity='poi')
-            for data in response['result']['places']:
-                if data['id'] not in placeIDSet:
-                    placeIDSet.add(data['id'])
-                    temp = {}
-                    temp['name'] = data['full_name']
-                    temp['id']=data['id']
-                    temp['place'] = place
-                    recordFile.write(json.dumps(temp) + '\n')
-        except Exception as e:
-            print 'API Error: ' + str(e)
-            continue
+        for i in range(10):
+            try:
+                requestNum += 1
+                if requestNum > requestLimit:
+                    print 'Wait for 15 mins...'
+                    time.sleep(900)
+                    requestNum = 1
+                response = twitter_api.geo.search(query=place, granularity='poi')
+                for data in response['result']['places']:
+                    if data['id'] not in placeIDSet:
+                        placeIDSet.add(data['id'])
+                        temp = {}
+                        temp['name'] = data['full_name']
+                        temp['id']=data['id']
+                        temp['place'] = place
+                        temp['place_type'] = data['place_type']
+                        recordFile.write(json.dumps(temp) + '\n')
+            except Exception as e:
+                print 'API Error: ' + str(e)
+                continue
     recordFile.close()
 
 
@@ -88,6 +90,8 @@ def TomTomPlaceCollector():
                     temp['category'] = place.replace('+', ' ')
                     temp['name'] = item['poi']['name']
                     temp['address'] = item['address']['freeformAddress']
+                    temp['lat'] = item['position']['lat']
+                    temp['lon'] = item['position']['lon']
                     recordFile.write(json.dumps(temp) + '\n')
             time.sleep(0.2)
             if data['summary']['numResults'] != 100:
