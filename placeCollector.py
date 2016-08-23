@@ -29,7 +29,7 @@ def oauth_login():
 def TwitterPlaceCollector():
     requestLimit = 15
     placeList = []
-    listFile = open('place.list', 'r')
+    listFile = open('place.category', 'r')
     for line in listFile:
         placeList.append(line.strip())
     listFile.close()
@@ -39,7 +39,7 @@ def TwitterPlaceCollector():
     placeIDSet = set()
     recordFile = open('places.json', 'a')
     for place in placeList:
-        print 'extracting followers for: ' + place
+        print 'extracting data for: ' + place
         try:
             requestNum += 1
             if requestNum > requestLimit:
@@ -95,5 +95,5 @@ def TomTomPlaceCollector():
     recordFile.close()
 
 if __name__ == '__main__':
-    #TwitterPlaceCollector()
-    TomTomPlaceCollector()
+    TwitterPlaceCollector()
+    #TomTomPlaceCollector()

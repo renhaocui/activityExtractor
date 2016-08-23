@@ -1,0 +1,273 @@
+{"place": "airport", "name": "John F. Kennedy International Airport, Queens", "id": "12f0133ced57367b"}
+{"place": "airport", "name": "Melbourne Airport, Melbourne", "id": "16a26ea8f189625e"}
+{"place": "airport", "name": "IAH Airport Area, Houston", "id": "4fe40522fa2e032e"}
+{"place": "airport", "name": "Portland International Airport, Portland", "id": "28f55ce8291b75cc"}
+{"place": "airport", "name": "Pondicherry Airport Area, Pondicherry", "id": "19a765ca1dcca04c"}
+{"place": "airport", "name": "Christchurch Airport, Christchurch City", "id": "00558f724674f804"}
+{"place": "airport", "name": "Dimapur Airport Area, Kohima", "id": "4d4cf526e693fa42"}
+{"place": "airport", "name": "Adilabad Airport Area, Adilabad", "id": "641261223d6fd9ec"}
+{"place": "airport", "name": "Kochbihar Airport Area, Koch Bihar", "id": "1fb537bbdf1623e9"}
+{"place": "airport", "name": "Brisbane Airport, Brisbane", "id": "3ca6a44799f797b5"}
+{"place": "airport", "name": "Jaisalmer Airport Area, Jaisalmer", "id": "709c2a0a992124d5"}
+{"place": "airport", "name": "Invercargill Airport, Invercargill City", "id": "00dc41a47389ee75"}
+{"place": "airport", "name": "Sultanpur Airport Area, Sultanpur", "id": "43b3b1007729ba05"}
+{"place": "airport", "name": "Whangarei Airport, Whangarei District", "id": "00195b24427afe1c"}
+{"place": "airport", "name": "Gaya Airport Area, Gaya", "id": "7f6fda9080e5d944"}
+{"place": "airport", "name": "Bokaro Airport Area, Bokaro Steel City", "id": "7eb5e9aade38fa50"}
+{"place": "airport", "name": "Bhuj Airport Area, Bhuj", "id": "6d09652d708b9ba6"}
+{"place": "airport", "name": "Northeast Philadelphia Airport, Philadelphia", "id": "10844ca3dc3870ef"}
+{"place": "airport", "name": "Port Blair Airport Area, Port Blair", "id": "6dd649ba2d94ebfb"}
+{"place": "airport", "name": "Nelson Airport, Nelson City", "id": "011a28ac2cfab112"}
+{"place": "school", "name": "Schooleys Mountain, NJ", "id": "00f25c895f4a577c"}
+{"place": "school", "name": "Schoolcraft, MI", "id": "01060b0b1685749b"}
+{"place": "school", "name": "Delhi Public School Area, Rohtak", "id": "29e599f8ad531b2a"}
+{"place": "school", "name": "St. Mary's School Area, Faizabad", "id": "5ee8a8c8da0c9a2c"}
+{"place": "school", "name": "Faizabad Army School Area, Faizabad", "id": "2162b532c77182e8"}
+{"place": "school", "name": "Law School Area, Memphis", "id": "0043be4370ff18f0"}
+{"place": "school", "name": "Government Senior Secondary School Area, Hanumangarh", "id": "6198d9c8eee50123"}
+{"place": "school", "name": "Shaheed Chandra Shekhar School Area, Chirmiri", "id": "3a556716c7780ca7"}
+{"place": "school", "name": "St. Xavier's High School Area, Khambhat", "id": "17c012fb8af221b9"}
+{"place": "school", "name": "RBCCC Matriculation School Area, Tiruvallur", "id": "4cc281e6ec869baa"}
+{"place": "school", "name": "Mangalbari Schoolpara, English Bazar", "id": "6b773ed413134aa9"}
+{"place": "school", "name": "Shri Ramkrishna Primary School Area, Tiruvallur", "id": "1a24211de3a9ab9d"}
+{"place": "school", "name": "Ravindra Nath Tagore School Area, Bahraich", "id": "6bf51471083af576"}
+{"place": "school", "name": "IMST English School Area, Malkangiri", "id": "13a35f67de685295"}
+{"place": "school", "name": "Sainik School Campus Area, Bijapur", "id": "45ed272e82ef3f94"}
+{"place": "school", "name": "Delhi Public School Area, Kohima", "id": "7518dce66d829df0"}
+{"place": "school", "name": "Lal Bahaddur School Area, Azamgarh", "id": "1141e38a81eda630"}
+{"place": "school", "name": "Downtown School Neighborhood, Memphis", "id": "47b30028bf0a8c6a"}
+{"place": "school", "name": "Islamiah Boys Higher Secondary School Area, Vaniyambadi", "id": "219c053d94651738"}
+{"place": "school", "name": "National Public School Area, Hanumangarh", "id": "26d2f8fbf493dd5e"}
+{"place": "amusement park", "name": "Buena Park, CA", "id": "0b93bc6a33455615"}
+{"place": "amusement park", "name": "Overland Park, KS", "id": "ef975175b1003544"}
+{"place": "amusement park", "name": "University Park, FL", "id": "883ee3f98abb082b"}
+{"place": "amusement park", "name": "College Park, GA", "id": "1703b859c254a0f9"}
+{"place": "amusement park", "name": "College Park, MD", "id": "e4c17912c815124d"}
+{"place": "amusement park", "name": "Florham Park, NJ", "id": "cf24f6a1fc150ee7"}
+{"place": "amusement park", "name": "Doxford Park, England", "id": "413337d3bda70024"}
+{"place": "amusement park", "name": "Parkersburg, WV", "id": "03834989f9b9479f"}
+{"place": "amusement park", "name": "Lincoln Park, MI", "id": "1769b19bf68bc543"}
+{"place": "amusement park", "name": "Deer Park, NY", "id": "081822bec6f679d4"}
+{"place": "amusement park", "name": "Severna Park, MD", "id": "f7ab884699cd7142"}
+{"place": "amusement park", "name": "St Louis Park, MN", "id": "464221381fb3f7c1"}
+{"place": "amusement park", "name": "Parkland, WA", "id": "69d2c4f187635997"}
+{"place": "amusement park", "name": "University Park, TX", "id": "f90baaeac804e75f"}
+{"place": "amusement park", "name": "Allen Park, MI", "id": "0c937cb917334546"}
+{"place": "amusement park", "name": "Huntington Park, CA", "id": "4d1d90faa5484b1c"}
+{"place": "amusement park", "name": "Cedar Park, TX", "id": "5c937363480a2c19"}
+{"place": "amusement park", "name": "Orland Park, IL", "id": "0da8a6c990f02eed"}
+{"place": "amusement park", "name": "Monterey Park, CA", "id": "fa424f169eef946e"}
+{"place": "amusement park", "name": "Oakland Park, FL", "id": "b230af2256484995"}
+{"place": "bank", "name": "Red Bank, SC", "id": "96ef9310fd1d1cb8"}
+{"place": "bank", "name": "Red Bank, NJ", "id": "4c68134c8752a7da"}
+{"place": "bank", "name": "East Bank, WV", "id": "c64da3f31a0d0719"}
+{"place": "bank", "name": "Bank Top, England", "id": "180da3014ac50dff"}
+{"place": "bank", "name": "Astwood Bank, England", "id": "5499a5bd369faa8c"}
+{"place": "bank", "name": "Banknock, Scotland", "id": "0ce49a34d571213d"}
+{"place": "bank", "name": "Bankura, India", "id": "548f981ababb1a49"}
+{"place": "bank", "name": "Banks, England", "id": "5afddeb087e078c8"}
+{"place": "bank", "name": "Red Bank, NJ", "id": "01a535292bc17c15"}
+{"place": "bank", "name": "Bangka, Bangka Belitung", "id": "bd62ec505db2d808"}
+{"place": "bank", "name": "Bankras, Amstelveen", "id": "6c36e46891fef069"}
+{"place": "bank", "name": "Land Bank, Milwaukee", "id": "2ab085d11256221e"}
+{"place": "bank", "name": "Bankim Nagar, Jalpaiguri", "id": "149aa0c297bcc4a0"}
+{"place": "bank", "name": "Banki Mohan Nullah, Puri", "id": "68e4a6811523ad70"}
+{"place": "bank", "name": "Bank Colony, Osmanabad", "id": "711d414e1b5e08e7"}
+{"place": "bank", "name": "East Bank, El Paso", "id": "03c59cd725e8ac48"}
+{"place": "bank", "name": "State Bank Colony, Bijnor", "id": "5e1e9b52aaf4aa7e"}
+{"place": "bank", "name": "Bank Note Press Area, Dewas", "id": "3036cadb1a79fd12"}
+{"place": "bank", "name": "State Bank Colony, Ratlam", "id": "3ee4af705729a2a8"}
+{"place": "bank", "name": "Syndicate Bank Colony, Agra", "id": "75cd727d6aa3ccc6"}
+{"place": "bar", "name": "West Borneo, Indonesia", "id": "6e0f0a00ef60a2bf"}
+{"place": "bar", "name": "Denpasar Barat, Indonesia", "id": "cf712fd91280ebff"}
+{"place": "bar", "name": "Kebayoran Baru, Indonesia", "id": "00ce43ecd091a5e8"}
+{"place": "bar", "name": "Barranquilla, Colombia", "id": "0105a80417c159b4"}
+{"place": "bar", "name": "Bahrain", "id": "e3e9c55876b99760"}
+{"place": "bar", "name": "Ilir Barat I, Indonesia", "id": "cf1c1c15bb686413"}
+{"place": "bar", "name": "Semarang Barat, Indonesia", "id": "9385367bb98a325e"}
+{"place": "bar", "name": "Barnaul, Russia", "id": "a8264fc094a7a0ba"}
+{"place": "bar", "name": "Bekasi Barat, Indonesia", "id": "555b2219c414bc99"}
+{"place": "bar", "name": "Barnet, London", "id": "7ef79c5ab17d518c"}
+{"place": "bar", "name": "Bogor Barat, Indonesia", "id": "e11c6d6d40ed2e67"}
+{"place": "bar", "name": "San Carlos de Bariloche, Argentina", "id": "011abdad7dddec83"}
+{"place": "bar", "name": "Medan Baru, Indonesia", "id": "be11fe7b1a051110"}
+{"place": "bar", "name": "Cirebon Barat, Indonesia", "id": "2eb44917f4d6dddc"}
+{"place": "bar", "name": "Padang Barat, Indonesia", "id": "c34269d2824fd138"}
+{"place": "bar", "name": "Barcelona, Spain", "id": "1a27537478dd8e38"}
+{"place": "bar", "name": "Barueri, Brasil", "id": "5997e92637149a16"}
+{"place": "bar", "name": "Barbados", "id": "80f128c34d2549c6"}
+{"place": "bar", "name": "Tanjung Karang Barat, Indonesia", "id": "9481bf0783a58cc0"}
+{"place": "bar", "name": "Bukit Baru, Melaka", "id": "89cddf6d2b991533"}
+{"place": "beauty salon", "name": "Beauty Point, Tasmania", "id": "0cb83578c1857286"}
+{"place": "beauty salon", "name": "Mount Beauty, Mount Beauty - Tawonga South", "id": "3fa90cbf80488d20"}
+{"place": "beauty salon", "name": "Beauty Point, Tasmania", "id": "004bad3b69250a32"}
+{"place": "beauty salon", "name": "Mount Beauty - Tawonga South, Victoria", "id": "00ffd6b25357fae0"}
+{"place": "beauty salon", "name": "Salon-de-Provence, France", "id": "4b25855d2b00ed42"}
+{"place": "beauty salon", "name": "Fort Salonga, NY", "id": "fab61fa558330e75"}
+{"place": "beauty salon", "name": "Dampierre-sur-Salon, France", "id": "6cbcd8c5362f0a28"}
+{"place": "beauty salon", "name": "Salona, PA", "id": "01ee98536cecac2b"}
+{"place": "beauty salon", "name": "Menetou-Salon, France", "id": "0238ef44d70dcb10"}
+{"place": "beauty salon", "name": "Mae Salong Nai, Thailand", "id": "001b9cce03f12ff5"}
+{"place": "beauty salon", "name": "Blanzy-la-Salonnaise, France", "id": "38ec837407e00b48"}
+{"place": "beauty salon", "name": "Salon, France", "id": "64e095babce76700"}
+{"place": "beauty salon", "name": "Salon, France", "id": "236ae6298d1a0058"}
+{"place": "beauty salon", "name": "Salonnes, France", "id": "0bcb96467e25c294"}
+{"place": "beauty salon", "name": "Salon-la-Tour, France", "id": "7177f2081a3434af"}
+{"place": "beauty salon", "name": "Salonta, Rom\u00e2nia", "id": "013064682196dbd5"}
+{"place": "beauty salon", "name": "Salon, India", "id": "783999db002c0a33"}
+{"place": "beauty salon", "name": "Mae Salong Nok, Thailand", "id": "003758827768b01c"}
+{"place": "casino", "name": "Casinoflat, Venlo", "id": "45ae1878ff44c873"}
+{"place": "casino", "name": "Real Monte Casino, Huitzilac", "id": "40cf8d982183dd01"}
+{"place": "casino", "name": "North Casino, New South Wales", "id": "5d5cb40734caedd3"}
+{"place": "casino", "name": "Monte Casino, Huitzilac", "id": "0736fdb5e51ad086"}
+{"place": "casino", "name": "Casino, New South Wales", "id": "427dca5bf82a3d7e"}
+{"place": "casino", "name": "Tepeyac Casino, Zapopan", "id": "02e9165a138446ae"}
+{"place": "casino", "name": "Casino de la Feria, Aguascalientes", "id": "55a0b031aa954726"}
+{"place": "casino", "name": "Casinos, Espa\u00f1a", "id": "26371d93aaa079e1"}
+{"place": "casino", "name": "Casino, New South Wales", "id": "00a39012008eb14d"}
+{"place": "church", "name": "Falls Church, VA", "id": "077e6b03695c28ee"}
+{"place": "church", "name": "Church Village, Wales", "id": "0f4e16e27e637b40"}
+{"place": "church", "name": "Church Hill, TN", "id": "06c31f44d1d9dbc8"}
+{"place": "church", "name": "Church Point, LA", "id": "bf64505c7d0045e0"}
+{"place": "church", "name": "Churchdown, England", "id": "0cfb02dd6263a78a"}
+{"place": "church", "name": "Churchill, OH", "id": "257e42c081284962"}
+{"place": "church", "name": "Church-Yonge Corridor, Toronto", "id": "00eaa9742c51e90d"}
+{"place": "church", "name": "Churchill, PA", "id": "b2b09b600929e181"}
+{"place": "church", "name": "Church Leigh, England", "id": "007deb1586ca8976"}
+{"place": "church", "name": "Burnt Church 14, New Brunswick", "id": "2103fd12f1d6aba2"}
+{"place": "church", "name": "Churchville, PA", "id": "5c0f9440458426d8"}
+{"place": "church", "name": "Church Hill, PA", "id": "008e1dac68ee2018"}
+{"place": "church", "name": "Church Fenton, England", "id": "4588ecc0818b8129"}
+{"place": "church", "name": "Churchill, Victoria", "id": "00234c8857a48ab0"}
+{"place": "church", "name": "Church Minshull, England", "id": "07ddccdcd365bf0b"}
+{"place": "church", "name": "Churchill, Waikato District", "id": "0088280645e8cc75"}
+{"place": "church", "name": "TELC Church Campus, Chidambaram", "id": "7174afab1f10281b"}
+{"place": "church", "name": "Churchlands, Perth (WA)", "id": "7d860d6d7492ebfd"}
+{"place": "church", "name": "Church Point, Sydney", "id": "0942eb69477fa467"}
+{"place": "church", "name": "Churchill Island, Victoria", "id": "60990ff8d43b15d5"}
+{"place": "cinema", "name": "Kamal Cinema Road Area, Maler Kotla", "id": "044501cc6cd3b407"}
+{"place": "cinema", "name": "Shyam Cinema Road Area, Gopalganj", "id": "064e0d9395936518"}
+{"place": "hospital", "name": "Hospitalet de Llobregat, Spain", "id": "1aca5ffbc553e95b"}
+{"place": "hospital", "name": "L'Hospitalet de Llobregat, Spain", "id": "06c3d8dc98eae281"}
+{"place": "hospital", "name": "Oliveira do Hospital, Portugal", "id": "68bfb20c8c9040ca"}
+{"place": "hospital", "name": "Middlemore Hospital, Auckland", "id": "0071252600973bd0"}
+{"place": "hospital", "name": "TB Hospital Quarters, Bellary", "id": "31db3b620fe96f57"}
+{"place": "hospital", "name": "Bharatpur Government Hospital Area, Bharatpur", "id": "1db3d1d8c14cfc13"}
+{"place": "hospital", "name": "Kurnool General Hospital Area, Kurnool", "id": "6d3ab7d1f89e0b07"}
+{"place": "hospital", "name": "Hospital Muguerza, Saltillo", "id": "08a27b569e02f47f"}
+{"place": "hospital", "name": "Christian Hospital Colony, Nabarangapur", "id": "6d86cc556a078e5a"}
+{"place": "hospital", "name": "Hospital de Traumatolog\u00eda, Naucalpan de Ju\u00e1rez", "id": "6df4fce8d85c5c7a"}
+{"place": "hospital", "name": "Waikato Hospital, Hamilton City", "id": "019d14eb37ec6cea"}
+{"place": "hospital", "name": "Hospital Hill, Napier City", "id": "00d35e125149bc3b"}
+{"place": "hospital", "name": "STNM Hospital Area, Gangtok", "id": "28f4cac870d0993f"}
+{"place": "hospital", "name": "Military Hospital Area, Sagar", "id": "312a5443f371c142"}
+{"place": "hospital", "name": "Hospital Colony, Chittaranjan", "id": "567193a8dcd1eac1"}
+{"place": "hospital", "name": "Military Hospital Area, Jhansi", "id": "127388ff34cad590"}
+{"place": "hospital", "name": "Government Hospital Area, Vaniyambadi", "id": "69211a44166b7e51"}
+{"place": "hospital", "name": "Firozpur Millitary Hospital Area, Firozpur", "id": "0dcb05f74d9cefbc"}
+{"place": "hospital", "name": "Hospital de las Californias, Tijuana", "id": "4b7058c48cee0f05"}
+{"place": "hospital", "name": "Civil Hospital Area, Palwal", "id": "34f5130ea262f9cd"}
+{"place": "railway station", "name": "Railway Station Area, Dhule", "id": "440dbcc9af49fa05"}
+{"place": "railway station", "name": "Railway Station Area, Amloh", "id": "4ee87d433875508e"}
+{"place": "railway station", "name": "Malout Railway Station, Malout", "id": "7ff624304df3a80f"}
+{"place": "railway station", "name": "Darbhanga Railway Station, Darbhanga", "id": "02f87da3bcb9a92c"}
+{"place": "railway station", "name": "Railway Station Area, Hajipur", "id": "03a5d7b2bedaaeee"}
+{"place": "railway station", "name": "Udaipur Railway Station, Udaipur", "id": "2b9b959330231bf3"}
+{"place": "railway station", "name": "Jaisalmer Railway Station, Jaisalmer", "id": "0c03decf04740bf1"}
+{"place": "railway station", "name": "Town Railway Station, Salem", "id": "2e3132d8356228a0"}
+{"place": "railway station", "name": "Railway Station Area, Amalner", "id": "2ba1598858aac42f"}
+{"place": "railway station", "name": "Pathankot Railway Station, Pathankot", "id": "4dcb2068efe7a26c"}
+{"place": "railway station", "name": "Khambhat Railway Station Area, Khambhat", "id": "14b5739d199963ef"}
+{"place": "railway station", "name": "Barshi Railway Station Area, Barshi", "id": "717383dc6ed70c32"}
+{"place": "railway station", "name": "Patan Railway Station Area, Patan", "id": "7e1498cda6c5a7d8"}
+{"place": "railway station", "name": "Shahabad Railway Station Area, Shahabad", "id": "7ab47468e4bde9ec"}
+{"place": "railway station", "name": "Abohar Railway Station Area, Abohar", "id": "394a34e58df749fb"}
+{"place": "railway station", "name": "Navagadh Railway Station Area, Jetpur Navagadh", "id": "08b10476ea69dd0f"}
+{"place": "railway station", "name": "Balurghat Railway Station Area, Balurghat", "id": "15084e031ebaa672"}
+{"place": "railway station", "name": "Dohad Railway Station Area, Dohad", "id": "5be3e2b3bfb49436"}
+{"place": "railway station", "name": "Ramadundam Railway Station Area, Ramagundam", "id": "49b2ebb8ea6aab76"}
+{"place": "railway station", "name": "Patli Railway Station Area, Gurgaon", "id": "534b121713f6077f"}
+{"place": "stadium", "name": "Dronacharya Stadium Area, Thanesar", "id": "7893ddf509912cb9"}
+{"place": "stadium", "name": "Mahatma Jyotiba Phule Stadium Area, Etawah", "id": "2fb709a7c9d2cb4d"}
+{"place": "stadium", "name": "Indira Gandhi Stadium, Pondicherry", "id": "1752ce43836fae59"}
+{"place": "stadium", "name": "Rao Tula Ram Stadium Area, Rewari", "id": "205d18396c6a5b2c"}
+{"place": "stadium", "name": "Paljor Stadium Area, Gangtok", "id": "0985389e564f4fd4"}
+{"place": "stadium", "name": "Stadium Area, Baltimore", "id": "4a0b84c6106fe759"}
+{"place": "stadium", "name": "Parshuram Tawre Stadium Area, Bhiwandi", "id": "00211d09b27086e2"}
+{"place": "stadium", "name": "Aankhede Stadium Area, Diu", "id": "790bc3cc61131e1d"}
+{"place": "stadium", "name": "Stadium Road Area, Maler Kotla", "id": "23b3661795c71672"}
+{"place": "stadium", "name": "Kodelas Stadium Area, Narasaraopet", "id": "1a4813d50ee328c0"}
+{"place": "stadium", "name": "Rajandra Stadium Area, Chhapra", "id": "154d14c69f61315f"}
+{"place": "stadium", "name": "Indira Stadium, Bahraich", "id": "754913dbf1da60be"}
+{"place": "stadium", "name": "Railway Stadium Colony, Gorakhpur", "id": "4d86a277051dcc89"}
+{"place": "stadium", "name": "Nehru Stadium Area, Kottayam", "id": "790767497ab9e39f"}
+{"place": "stadium", "name": "Dhyanchand Hockey Stadium Area, Ramgarh", "id": "4a2d5a1ce92033c8"}
+{"place": "stadium", "name": "Corporation Stadium Area, Kozhikode", "id": "4dafc20a5967f2e6"}
+{"place": "stadium", "name": "Kala Mahal Stadium Area, Barnala", "id": "289883cc1080c36c"}
+{"place": "stadium", "name": "K M Stadium Area, Malkangiri", "id": "296868bf3e062302"}
+{"place": "stadium", "name": "Lohagarh Stadium Area, Bharatpur", "id": "390433de997f231f"}
+{"place": "stadium", "name": "Stadium Nagar, Ambikapur", "id": "34e2947f29654da2"}
+{"place": "hotel", "name": "Zona Hotelera Norte, Puerto Vallarta", "id": "25179c322ebb528d"}
+{"place": "hotel", "name": "Verspreide huizen hotel Wolfheze, Renkum", "id": "5d7e0b108af99760"}
+{"place": "hotel", "name": "Zona Hotelera, Benito Ju\u00e1rez", "id": "011d4f5282ae8b7c"}
+{"place": "hotel", "name": "Hoteleros, Oaxaca de Ju\u00e1rez", "id": "6ecbba9c92799ea0"}
+{"place": "shopping center", "name": "New Hubli Shopping and Entertainment Area, Hubli", "id": "09a7c23191e7a2d7"}
+{"place": "shopping center", "name": "Centerville, OH", "id": "edacd050f402302c"}
+{"place": "shopping center", "name": "Centereach, NY", "id": "faf8aaecf6a390c0"}
+{"place": "shopping center", "name": "Lewis Center, OH", "id": "01a5a4b9098ae238"}
+{"place": "shopping center", "name": "Civic Center, San Francisco", "id": "9fff4bb5d61a7564"}
+{"place": "shopping center", "name": "Howland Center, OH", "id": "62a807b4f74f0753"}
+{"place": "shopping center", "name": "Chili Center, NY", "id": "0026fc7d6e372348"}
+{"place": "shopping center", "name": "Michigan Center, MI", "id": "008d66995ceff3c1"}
+{"place": "shopping center", "name": "Brooklyn Center, MN", "id": "70e030d7c5f03769"}
+{"place": "shopping center", "name": "Clarence Center, NY", "id": "01369daa5fd253f9"}
+{"place": "shopping center", "name": "Centerville, SC", "id": "17418018548556a6"}
+{"place": "shopping center", "name": "Center Moriches, NY", "id": "d28961cf00256a59"}
+{"place": "shopping center", "name": "Valley Center, KS", "id": "6d1d07db5725ba60"}
+{"place": "shopping center", "name": "Cumberland Center, ME", "id": "015b57d96e07430c"}
+{"place": "shopping center", "name": "White Center, WA", "id": "3a201fc1ccc493b8"}
+{"place": "shopping center", "name": "Dulles Town Center, VA", "id": "00b957f2781eee35"}
+{"place": "shopping center", "name": "Middleborough Center, MA", "id": "00d8beb558f3e0da"}
+{"place": "shopping center", "name": "Old Saybrook Center, CT", "id": "ca192b5dd3c2aa7d"}
+{"place": "shopping center", "name": "Center Line, MI", "id": "36b31197573e0356"}
+{"place": "shopping center", "name": "Centerton, AR", "id": "0097489a070474a6"}
+{"place": "company", "name": "Titan Watch Company Main Bazar Area, Moga", "id": "5161ab139e4ca3cf"}
+{"place": "company", "name": "Panchmahal Cement Company Area, Dohad", "id": "02648111a5541818"}
+{"place": "company", "name": "BOGL Company Area, Durgapur", "id": "6f34709631e69d8d"}
+{"place": "company", "name": "Indian Gas Company Godown, Nagaon", "id": "5fb6d16592a79bc5"}
+{"place": "company", "name": "Company Bay, Dunedin City", "id": "00cef3c817492def"}
+{"place": "company", "name": "Tata Power Company Ltd Area, Kalyan Dombivali", "id": "7f05f009e247f1e9"}
+{"place": "factory outlet", "name": "Moose Factory 68, Ontario", "id": "1694730b6c16f93c"}
+{"place": "factory outlet", "name": "Factory Area, Patiala", "id": "3764c4984373c65e"}
+{"place": "factory outlet", "name": "Factory Island 1, Ontario", "id": "3dad9b757b317c2a"}
+{"place": "factory outlet", "name": "Wine Factory Area, Kishangarh", "id": "2c338da26e6b71fc"}
+{"place": "factory outlet", "name": "Rubber Factory Area, Bhavnagar", "id": "6ca35546c296229f"}
+{"place": "factory outlet", "name": "BHEL Jhansi Factory, India", "id": "73b3b655bf7f305c"}
+{"place": "factory outlet", "name": "Balaji Cotton Factory Area, Hinganghat", "id": "3d0b9daab0949126"}
+{"place": "factory outlet", "name": "Palanpur Ice Factory Area, Palanpur", "id": "6de568fb8b50db01"}
+{"place": "factory outlet", "name": "HUML Pipe Factory Area, Bellary", "id": "7963155d871f3b3c"}
+{"place": "factory outlet", "name": "Parry Agro Factory Area, Valparai", "id": "6b52d06eca05a79b"}
+{"place": "factory outlet", "name": "Motihari Sugar Factory Area, Motihari", "id": "24179f676dc7644f"}
+{"place": "factory outlet", "name": "Kesoram Reyon Factory Area, Haora", "id": "7b31d0bc1b15e272"}
+{"place": "factory outlet", "name": "King Chemical Factory Area, Abohar", "id": "1edeb3dcf994fa7a"}
+{"place": "factory outlet", "name": "Patel Tiles Factory Area, Godhra", "id": "073e83fd319053ec"}
+{"place": "general car repair servicing", "name": "General Escobedo, Nuevo Le\u00f3n", "id": "efcdd0cc2919c82a"}
+{"place": "general car repair servicing", "name": "General Pico, Argentina", "id": "00a566b524a6764d"}
+{"place": "general car repair servicing", "name": "General Roca, Argentina", "id": "0016a28c5fdad928"}
+{"place": "general car repair servicing", "name": "General Rodr\u00edguez, Argentina", "id": "01095dea21538f8b"}
+{"place": "general car repair servicing", "name": "General Pedernera, Argentina", "id": "01b90c376479a920"}
+{"place": "general car repair servicing", "name": "General Obligado, Argentina", "id": "014e124562aef263"}
+{"place": "general car repair servicing", "name": "General San Mart\u00edn, Argentina", "id": "0116822976069bc9"}
+{"place": "general car repair servicing", "name": "Ciudad del Libertador General San Mart\u00edn, Argentina", "id": "004b853c78703c20"}
+{"place": "general car repair servicing", "name": "Firmat-General L\u00f3pez, Argentina", "id": "01426ebe62f8b6b8"}
+{"place": "general car repair servicing", "name": "General Las Heras, Argentina", "id": "0081a4b50a833f88"}
+{"place": "general car repair servicing", "name": "Puerto General San Martin, Argentina", "id": "00882e30372d2e93"}
+{"place": "general car repair servicing", "name": "General Zuazua, Nuevo Le\u00f3n", "id": "a8b1ab37b2e663e9"}
+{"place": "general car repair servicing", "name": "General Salgado, Brasil", "id": "7950b67138a21acf"}
+{"place": "general car repair servicing", "name": "General Carneiro, Brasil", "id": "15cc018a4064c7e1"}
+{"place": "general car repair servicing", "name": "General C\u00e2mara, Brasil", "id": "6e60dc3e505acf38"}
+{"place": "general car repair servicing", "name": "General Lagos, Chile", "id": "007694e65317ad53"}
+{"place": "general car repair servicing", "name": "General Ter\u00e1n, Nuevo Le\u00f3n", "id": "6b7e56f6db69ab57"}
+{"place": "general car repair servicing", "name": "Pueblo General Belgrano, Argentina", "id": "011d1336207607e1"}
+{"place": "general car repair servicing", "name": "General Plutarco El\u00edas Calles, Sonora", "id": "c9a7ddaf058fddae"}
+{"place": "general car repair servicing", "name": "Car Bazar, Malout", "id": "203f16edd657021a"}
