@@ -72,10 +72,10 @@ def TomTomPlaceCollector():
     key = 'cx4etag3te8k2d8bss6fy6bd'
 
     placeIDSet = set()
-    recordFile = open('categoryPlaces.json', 'a')
+    recordFile = open('categoryPlaces2.json', 'a')
     for place in placeList:
         print 'Collecting [' + place+']'
-        for i in range(10):
+        for i in range(20):
             offset = 100*i
             serviceURL = 'https://api.tomtom.com/search/2/categorySearch/'+place+'.JSON'+'?limit=100&countrySet=US&ofs='+str(offset)+'&key='+key
             #print serviceURL
@@ -99,5 +99,5 @@ def TomTomPlaceCollector():
     recordFile.close()
 
 if __name__ == '__main__':
-    TwitterPlaceCollector()
-    #TomTomPlaceCollector()
+    #TwitterPlaceCollector()
+    TomTomPlaceCollector()
