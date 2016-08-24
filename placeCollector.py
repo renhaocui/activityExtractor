@@ -53,7 +53,7 @@ def TwitterPlaceCollector():
                         placeIDSet.add(data['id'])
                         temp = {}
                         temp['name'] = data['full_name']
-                        temp['id']=data['id']
+                        temp['id'] = data['id']
                         temp['place'] = place
                         temp['place_type'] = data['place_type']
                         recordFile.write(json.dumps(temp) + '\n')
@@ -65,7 +65,7 @@ def TwitterPlaceCollector():
 
 def TomTomPlaceCollector():
     placeList = []
-    listFile = open('place.category', 'r')
+    listFile = open('place.tomtom.category', 'r')
     for line in listFile:
         placeList.append(line.strip().replace(' ', '+'))
     listFile.close()
@@ -74,13 +74,13 @@ def TomTomPlaceCollector():
     placeIDSet = set()
     recordFile = open('categoryPlaces2.json', 'a')
     for place in placeList:
-        print 'Collecting [' + place+']'
+        print 'Collecting [' + place + ']'
         for i in range(20):
-            offset = 100*i
-            serviceURL = 'https://api.tomtom.com/search/2/categorySearch/'+place+'.JSON'+'?limit=100&countrySet=US&ofs='+str(offset)+'&key='+key
-            #print serviceURL
+            offset = 100 * i
+            serviceURL = 'https://api.tomtom.com/search/2/categorySearch/' + place + '.JSON' + '?limit=100&countrySet=US&ofs=' + str(offset) + '&key=' + key
+            # print serviceURL
             response = requests.get(serviceURL)
-            #print response.text
+            # print response.text
             data = json.loads(response.text)
             for item in data['results']:
                 if item['id'] not in placeIDSet:
@@ -98,6 +98,109 @@ def TomTomPlaceCollector():
                 break
     recordFile.close()
 
+
+def GooglePlaceCollector():
+    qList = ['', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+    key = 'AIzaSyCx4TvgtOlzVV33dzeejTI5G8g23xDUCYw'
+    requestLimit = 150000
+    categoryList = []
+    categoryFile = open('place.google.category', 'r')
+    for line in categoryFile:
+        categoryList.append(line.strip())
+    categoryFile.close()
+
+    requestNum = 0
+    for category in categoryList:
+        placeIDSet = set()
+        print 'Collecting: ' + category
+        nextPageTokens = []
+        outputFile = open('places/category.place', 'w')
+        for q in qList:
+            requestNum += 1
+            if requestNum > requestLimit:
+                print 'wait for 25 hours'
+                time.sleep(86400)
+                requestNum = 1
+            url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + '&language=en&query=' + q + '&type=' + category
+            try:
+                response = requests.get(url, verify=False)
+            except Exception as e:
+                print 'Error: ' + str(e)
+                continue
+            data = json.loads(response.text)
+            if 'next_page_token' in data:
+                if data['next_page_token'] is not None:
+                    nextPageTokens.append(data['next_page_token'])
+            for item in data['results']:
+                if item['id'] not in placeIDSet:
+                    placeIDSet.add(item['id'])
+                    temp = {}
+                    temp['name'] = item['name']
+                    temp['lat'] = item['geometry']['location']['lat']
+                    temp['lon'] = item['geometry']['location']['lng']
+                    temp['id'] = item['id']
+                    temp['place_id'] = item['place_id']
+                    temp['category'] = item['types']
+                    outputFile.write(json.dumps(temp) + '\n')
+
+            furtherTokenList = []
+            for token in nextPageTokens:
+                requestNum += 1
+                if requestNum > requestLimit:
+                    print 'wait for 25 hours'
+                    time.sleep(86400)
+                    requestNum = 1
+                url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + 'pagetoken=' + token
+                try:
+                    response = requests.get(url, verify=False)
+                except Exception as e:
+                    print 'Error: ' + str(e)
+                    continue
+                data = json.loads(response.text)
+                if 'next_page_token' in data:
+                    if data['next_page_token'] is not None:
+                        furtherTokenList.append(data['next_page_token'])
+                for item in data['results']:
+                    if item['id'] not in placeIDSet:
+                        placeIDSet.add(item['id'])
+                        temp = {}
+                        temp['name'] = item['name']
+                        temp['lat'] = item['geometry']['location']['lat']
+                        temp['lon'] = item['geometry']['location']['lng']
+                        temp['id'] = item['id']
+                        temp['place_id'] = item['place_id']
+                        temp['category'] = item['types']
+                        outputFile.write(json.dumps(temp) + '\n')
+
+            for token in furtherTokenList:
+                requestNum += 1
+                if requestNum > requestLimit:
+                    print 'wait for 25 hours'
+                    time.sleep(86400)
+                    requestNum = 1
+                url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + 'pagetoken=' + token
+                try:
+                    response = requests.get(url, verify=False)
+                except Exception as e:
+                    print 'Error: ' + str(e)
+                    continue
+                data = json.loads(response.text)
+                for item in data['results']:
+                    if item['id'] not in placeIDSet:
+                        placeIDSet.add(item['id'])
+                        temp = {}
+                        temp['name'] = item['name']
+                        temp['lat'] = item['geometry']['location']['lat']
+                        temp['lon'] = item['geometry']['location']['lng']
+                        temp['id'] = item['id']
+                        temp['place_id'] = item['place_id']
+                        temp['category'] = item['types']
+                        outputFile.write(json.dumps(temp) + '\n')
+
+        outputFile.close()
+
+
 if __name__ == '__main__':
-    #TwitterPlaceCollector()
-    TomTomPlaceCollector()
+    # TwitterPlaceCollector()
+    # TomTomPlaceCollector()
+    GooglePlaceCollector()
