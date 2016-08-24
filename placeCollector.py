@@ -102,7 +102,7 @@ def TomTomPlaceCollector():
 def GooglePlaceCollector():
     qList = ['', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
     key = 'AIzaSyCx4TvgtOlzVV33dzeejTI5G8g23xDUCYw'
-    requestLimit = 150000
+    requestLimit = 149000
     categoryList = []
     categoryFile = open('place.google.category', 'r')
     for line in categoryFile:
@@ -114,7 +114,7 @@ def GooglePlaceCollector():
         placeIDSet = set()
         print 'Collecting: ' + category
         nextPageTokens = []
-        outputFile = open('places/category.place', 'w')
+        outputFile = open('places/'+category+'.place', 'w')
         for q in qList:
             requestNum += 1
             if requestNum > requestLimit:

@@ -5,3 +5,4 @@ ark-tweet-nlp/*
 data/*
 output.pos
 output.pos
+places/*
