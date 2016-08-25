@@ -72,7 +72,7 @@ def TomTomPlaceCollector():
     key = 'cx4etag3te8k2d8bss6fy6bd'
 
     placeIDSet = set()
-    recordFile = open('categoryPlaces2.json', 'a')
+    recordFile = open('tomtom_category_places.json', 'a')
     for place in placeList:
         print 'Collecting [' + place + ']'
         for i in range(20):
@@ -114,7 +114,7 @@ def GooglePlaceCollector():
         placeIDSet = set()
         print 'Collecting: ' + category
         nextPageTokens = []
-        outputFile = open('places/'+category+'.place', 'w')
+        outputFile = open('google_places/'+category+'.place', 'w')
         for q in qList:
             requestNum += 1
             if requestNum > requestLimit:
