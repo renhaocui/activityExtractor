@@ -29,7 +29,7 @@ def oauth_login():
 def TwitterPlaceCollector():
     requestLimit = 15
     placeList = []
-    listFile = open('places.list', 'r')
+    listFile = open('lists/places.list', 'r')
     for line in listFile:
         placeList.append(line.strip())
     listFile.close()
@@ -65,7 +65,7 @@ def TwitterPlaceCollector():
 
 def TomTomPlaceCollector():
     placeList = []
-    listFile = open('place.tomtom.category', 'r')
+    listFile = open('lists/place.tomtom.category', 'r')
     for line in listFile:
         placeList.append(line.strip().replace(' ', '+'))
     listFile.close()
@@ -104,7 +104,7 @@ def GooglePlaceCollector():
     key = 'AIzaSyCx4TvgtOlzVV33dzeejTI5G8g23xDUCYw'
     requestLimit = 149000
     categoryList = []
-    categoryFile = open('list/place.google.category', 'r')
+    categoryFile = open('lists/place.google.category', 'r')
     for line in categoryFile:
         categoryList.append(line.strip())
     categoryFile.close()
