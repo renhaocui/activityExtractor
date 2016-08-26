@@ -100,11 +100,11 @@ def TomTomPlaceCollector():
 
 
 def GooglePlaceCollector():
-    qList = ['', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+    qList = ['', '0', '1', '2', '3', '4','5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
     key = 'AIzaSyCx4TvgtOlzVV33dzeejTI5G8g23xDUCYw'
     requestLimit = 149000
     categoryList = []
-    categoryFile = open('place.google.category', 'r')
+    categoryFile = open('list/place.google.category', 'r')
     for line in categoryFile:
         categoryList.append(line.strip())
     categoryFile.close()
@@ -114,11 +114,11 @@ def GooglePlaceCollector():
         placeIDSet = set()
         print 'Collecting: ' + category
         nextPageTokens = []
-        outputFile = open('google_places/'+category+'.place', 'w')
+        outputFile = open('data/google_places2/'+category+'.place', 'w')
         for q in qList:
             requestNum += 1
             if requestNum > requestLimit:
-                print 'wait for 25 hours'
+                print 'wait for 24 hours'
                 time.sleep(86400)
                 requestNum = 1
             url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + '&language=en&query=' + q + '&type=' + category
