@@ -54,10 +54,10 @@ def removeRT(input):
 def tweetCleaner(input):
     input = input.replace('w/', 'with')
     input = input.replace('w/o', 'without')
-    input = removeUsername(input, '')
-    input = removeHashtag(input, '')
-    input = removeEmoji(input, '')
-    input = tokenizeLinks(input, '')
+    input = removeUsername(input, 'USERNE')
+    input = removeHashtag(input, 'HASHTG')
+    input = removeEmoji(input, 'EMOJ')
+    input = tokenizeLinks(input, 'URLL')
     for char in charList:
         input = input.replace(char, '')
     input = input.replace('\\"', '"')
