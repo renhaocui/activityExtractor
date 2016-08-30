@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import tweetTextCleaner
+import random
 
 def labeller():
     placeList = []
@@ -21,6 +22,7 @@ def labeller():
     inputFile = open('data/place_labelled_tweet/poi_tweet.json', 'r')
     outputFile = open('data/labelled_data/googleTweet.json', 'w')
     contentFile = open('data/labelled_data/googleTweet.content', 'w')
+    categoryFile = open('data/labelled_data/googleTweet.category', 'w')
     labelFile = open('data/labelled_data/googleTweet.label', 'w')
     labelsFile = open('data/labelled_data/googleTweet.labels', 'w')
     nameFile = open('data/labelled_data/googleTweet.name', 'w')
@@ -38,6 +40,7 @@ def labeller():
                 labels += placeActivityMapper[cate] + ' '
         labelsFile.write(labels.strip()+'\n')
         label = item['collect_place_category']
+        categoryFile.write(label+'\n')
         nameFile.write(name+'\n')
         if label in placeActivityMapper:
             item['label'] = placeActivityMapper[label]
@@ -56,8 +59,68 @@ def labeller():
     contentFile.close()
     labelFile.close()
     labelsFile.close()
-
+    categoryFile.close()
     print index
+
+
+def sampler():
+    contentFile = open('data/labelled_data/googleTweet.content', 'r')
+    labelFile = open('data/labelled_data/googleTweet.label', 'r')
+    labelsFile = open('data/labelled_data/googleTweet.labels', 'r')
+    nameFile = open('data/labelled_data/googleTweet.name', 'r')
+    categoryFile = open('data/labelled_data/googleTweet.category', 'r')
+    content = []
+    label = []
+    labels = []
+    name = []
+    category = []
+    for index, line in enumerate(contentFile):
+        content.append(line)
+    totalNum = index
+    for line in labelFile:
+        label.append(line)
+    for line in labelsFile:
+        labels.append(line)
+    for line in nameFile:
+        name.append(line)
+    for line in categoryFile:
+        category.append(line)
+
+    contentFile.close()
+    labelFile.close()
+    labelsFile.close()
+    nameFile.close()
+    categoryFile.close()
+
+    indexSet = []
+    while (True):
+        if len(indexSet) > 500:
+            break
+        num = random.randint(0, totalNum)
+        if num not in indexSet:
+            indexSet.append(num)
+
+    sampleContentFile = open('data/labelled_data/googleTweetSample.content', 'w')
+    sampleLabelFile = open('data/labelled_data/googleTweetSample.label', 'w')
+    sampleLabelsFile = open('data/labelled_data/googleTweetSample.labels', 'w')
+    sampleNameFile = open('data/labelled_data/googleTweetSample.name', 'w')
+    sampleCategoryFile = open('data/labelled_data/googleTweetSample.category', 'w')
+
+    for index in indexSet:
+        sampleContentFile.write(content[index])
+        sampleLabelFile.write(label[index])
+        sampleLabelsFile.write(labels[index])
+        sampleNameFile.write(name[index])
+        sampleCategoryFile.write(category[index])
+
+    sampleContentFile.close()
+    sampleLabelFile.close()
+    sampleLabelsFile.close()
+    sampleNameFile.close()
+    sampleCategoryFile.close()
+
+    print totalNum
 
 if __name__ == "__main__":
     labeller()
+    sampler()
