@@ -26,9 +26,11 @@ def labeller():
     labelFile = open('data/labelled_data/googleTweet.label', 'w')
     labelsFile = open('data/labelled_data/googleTweet.labels', 'w')
     nameFile = open('data/labelled_data/googleTweet.name', 'w')
+    timeFile = open('data/labelled_data/googleTweet.time', 'w')
     for index, line in enumerate(inputFile):
         item = json.loads(line.strip())
         content = tweetTextCleaner.tweetCleaner(item['text']).encode('utf-8')
+        #content = item['text'].encode('utf-8')
         contentFile.write(content+'\n')
         categories = item['google_place_category']
         name = item['twitter_place_name'].encode('utf-8')
@@ -41,6 +43,7 @@ def labeller():
         labelsFile.write(labels.strip()+'\n')
         label = item['collect_place_category']
         categoryFile.write(label+'\n')
+        timeFile.write(item['created_at']+'\n')
         nameFile.write(name+'\n')
         if label in placeActivityMapper:
             item['label'] = placeActivityMapper[label]
@@ -60,6 +63,7 @@ def labeller():
     labelFile.close()
     labelsFile.close()
     categoryFile.close()
+    timeFile.close()
     print index
 
 
@@ -69,10 +73,12 @@ def sampler():
     labelsFile = open('data/labelled_data/googleTweet.labels', 'r')
     nameFile = open('data/labelled_data/googleTweet.name', 'r')
     categoryFile = open('data/labelled_data/googleTweet.category', 'r')
+    timeFile = open('data/labelled_data/googleTweet.time', 'r')
     content = []
     label = []
     labels = []
     name = []
+    time = []
     category = []
     for index, line in enumerate(contentFile):
         content.append(line)
@@ -85,16 +91,18 @@ def sampler():
         name.append(line)
     for line in categoryFile:
         category.append(line)
+    for line in timeFile:
+        time.append(line)
 
     contentFile.close()
     labelFile.close()
     labelsFile.close()
     nameFile.close()
     categoryFile.close()
-
+    timeFile.close()
     indexSet = []
     while (True):
-        if len(indexSet) > 500:
+        if len(indexSet) > 100:
             break
         num = random.randint(0, totalNum)
         if num not in indexSet:
@@ -105,6 +113,7 @@ def sampler():
     sampleLabelsFile = open('data/labelled_data/googleTweetSample.labels', 'w')
     sampleNameFile = open('data/labelled_data/googleTweetSample.name', 'w')
     sampleCategoryFile = open('data/labelled_data/googleTweetSample.category', 'w')
+    sampleTimeFile = open('data/labelled_data/googleTweetSample.time', 'w')
 
     for index in indexSet:
         sampleContentFile.write(content[index])
@@ -112,12 +121,14 @@ def sampler():
         sampleLabelsFile.write(labels[index])
         sampleNameFile.write(name[index])
         sampleCategoryFile.write(category[index])
+        sampleTimeFile.write(time[index])
 
     sampleContentFile.close()
     sampleLabelFile.close()
     sampleLabelsFile.close()
     sampleNameFile.close()
     sampleCategoryFile.close()
+    timeFile.close()
 
     print totalNum
 
