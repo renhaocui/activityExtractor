@@ -66,9 +66,36 @@ def temporalExtractor(input):
 
     return outputList
 
+
+def NERExtractor(inputFile):
+    input = open(inputFile, 'r')
+    output = []
+    for line in input:
+        entities = ''
+        words = line.strip().split(' ')
+        firstEnt = True
+        for word in words:
+            items = word.split('/')
+            try:
+                if items[1] == 'B-ENTITY':
+                    if firstEnt:
+                        entities += items[0]+' '
+                        firstEnt = False
+                    else:
+                        entities += ', ' + items[0] + ' '
+                elif items[1] == 'I-ENTITY':
+                    entities += items[0] + ' '
+            except:
+                print line
+        output.append(entities)
+    input.close()
+    return output
+
+'''
 sents = ['This is some annotated samples for the experiment tonight.', 'I have no plan for tomorrow morning.',
          'The game next monday would be awesome!']
 POSoutput = POStagger(sents)
 print POSoutput
 tempOutput = temporalExtractor(sents)
 print tempOutput
+'''

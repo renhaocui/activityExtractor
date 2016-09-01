@@ -3,6 +3,9 @@ import json
 import tweetTextCleaner
 import random
 
+import utilities
+
+
 def labeller():
     placeList = []
     activityList = []
@@ -64,6 +67,13 @@ def labeller():
     labelsFile.close()
     categoryFile.close()
     timeFile.close()
+
+    NERList = utilities.NERExtractor('data/labelled_data/googleTweet.content.ner')
+    nerFile = open('data/labelled_data/googleTweet.ner', 'w')
+    for item in NERList:
+        nerFile.write(item+'\n')
+    nerFile.close()
+
     print index
 
 
@@ -74,12 +84,16 @@ def sampler():
     nameFile = open('data/labelled_data/googleTweet.name', 'r')
     categoryFile = open('data/labelled_data/googleTweet.category', 'r')
     timeFile = open('data/labelled_data/googleTweet.time', 'r')
+    nerFile = open('data/labelled_data/googleTweet.ner', 'r')
+
     content = []
     label = []
     labels = []
     name = []
     time = []
     category = []
+    ner = []
+
     for index, line in enumerate(contentFile):
         content.append(line)
     totalNum = index
@@ -93,6 +107,8 @@ def sampler():
         category.append(line)
     for line in timeFile:
         time.append(line)
+    for line in nerFile:
+        ner.append(line)
 
     contentFile.close()
     labelFile.close()
@@ -100,6 +116,7 @@ def sampler():
     nameFile.close()
     categoryFile.close()
     timeFile.close()
+    nerFile.close()
     indexSet = []
     while (True):
         if len(indexSet) > 100:
@@ -114,6 +131,7 @@ def sampler():
     sampleNameFile = open('data/labelled_data/googleTweetSample.name', 'w')
     sampleCategoryFile = open('data/labelled_data/googleTweetSample.category', 'w')
     sampleTimeFile = open('data/labelled_data/googleTweetSample.time', 'w')
+    sampleNerFile = open('data/labelled_data/googleTweetSample.ner', 'w')
 
     for index in indexSet:
         sampleContentFile.write(content[index])
@@ -122,14 +140,15 @@ def sampler():
         sampleNameFile.write(name[index])
         sampleCategoryFile.write(category[index])
         sampleTimeFile.write(time[index])
+        sampleNerFile.write(ner[index])
 
     sampleContentFile.close()
     sampleLabelFile.close()
     sampleLabelsFile.close()
     sampleNameFile.close()
     sampleCategoryFile.close()
-    timeFile.close()
-
+    sampleTimeFile.close()
+    sampleNerFile.close()
     print totalNum
 
 if __name__ == "__main__":

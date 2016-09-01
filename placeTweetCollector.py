@@ -88,55 +88,59 @@ def tomtomTweetCollector():
         outFile.close()
 
 
-def googleTweetCollector():
+def googleTweetCollector(occurrence):
     requestLimit = 180
     requestNum = 0
     twitter_api = oauth_login()
-    for file in os.listdir("places"):
-        print 'Collecting: '+file.split('.')[0]
-        tweetIDSet = set()
-        placeData = {}
-        inputFile = open('places/'+file, 'r')
-        for line in inputFile:
-            data = json.loads(line.strip())
-            lon = data['lon']
-            lat = data['lat']
-            category = data['category']
-            name = data['name']
-            id = data['id']
-            placeData[id] = {'name': name, 'lon': lon, 'lat': lat, 'category': category}
-        inputFile.close()
+    tweetIDSet = set()
+    for i in range(occurrence):
+        print 'Round '+str(i)
+        for file in os.listdir("data/google_places3"):
+            print 'Collecting: '+file.split('.')[0]
+            placeData = {}
+            inputFile = open('data/google_places3/'+file, 'r')
+            for line in inputFile:
+                data = json.loads(line.strip())
+                lon = data['lon']
+                lat = data['lat']
+                category = data['category']
+                name = data['name']
+                id = data['id']
+                placeData[id] = {'name': name, 'lon': lon, 'lat': lat, 'category': category}
+            inputFile.close()
 
-        outputFile = open('placeTweets/'+file.split('.')[0] + '.json', 'w')
-        for id in placeData:
-            requestNum += 1
-            if requestNum > requestLimit:
-                print 'Wait for 15 mins...'
-                time.sleep(900)
-                requestNum = 1
-            try:
-                response = twitter_api.search.tweets(q=' ', geocode=str(placeData[id]['lat']) + ',' + str(placeData[id]['lon']) + ',' + '0.1mi', count=100, result_type='mixed',
-                                                     lang='en')
-            except Exception as e:
-                print 'Error ' + str(e)
-                continue
-            for tweet in response['statuses']:
-                if tweet['id'] not in tweetIDSet:
-                    temp = {}
-                    tweetIDSet.add(tweet['id'])
-                    temp['entities'] = tweet['entities']
-                    temp['created_at'] = tweet['created_at']
-                    temp['id'] = tweet['id']
-                    temp['text'] = tweet['text']
-                    temp['place'] = tweet['place']
-                    temp['google_place_name'] = placeData[id]['name']
-                    temp['google_place_category'] = placeData[id]['category']
-                    temp['user_location'] = tweet['user']['location']
-                    temp['user_id'] = tweet['user']['id']
-                    temp['user_description'] = tweet['user']['description']
-                    outputFile.write(json.dumps(temp) + '\n')
-        outputFile.close()
+            outputFile = open('data/google_place_tweets3.2/'+file.split('.')[0] + '.json', 'a')
+            for id in placeData:
+                requestNum += 1
+                if requestNum > requestLimit:
+                    print 'Wait for 15 mins...'
+                    time.sleep(900)
+                    requestNum = 1
+                try:
+                    response = twitter_api.search.tweets(q=' ', geocode=str(placeData[id]['lat']) + ',' + str(placeData[id]['lon']) + ',' + '0.01km', count=100, result_type='mixed',
+                                                         lang='en')
+                except Exception as e:
+                    print 'Error ' + str(e)
+                    continue
+                for tweet in response['statuses']:
+                    if tweet['id'] not in tweetIDSet:
+                        temp = {}
+                        tweetIDSet.add(tweet['id'])
+                        temp['entities'] = tweet['entities']
+                        temp['created_at'] = tweet['created_at']
+                        temp['id'] = tweet['id']
+                        temp['text'] = tweet['text']
+                        temp['place'] = tweet['place']
+                        temp['google_place_name'] = placeData[id]['name']
+                        temp['google_place_category'] = placeData[id]['category']
+                        temp['user_location'] = tweet['user']['location']
+                        temp['user_id'] = tweet['user']['id']
+                        temp['user_description'] = tweet['user']['description']
+                        outputFile.write(json.dumps(temp) + '\n')
+            outputFile.close()
+        print 'Wait for 8 hours...'
+        time.sleep(28800)
 
 if __name__ == '__main__':
     #tomtomTweetCollector()
-    googleTweetCollector()
+    googleTweetCollector(10)
