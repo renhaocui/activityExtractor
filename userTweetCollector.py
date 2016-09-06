@@ -25,50 +25,58 @@ def oauth_login():
     return twitter_api
 
 
-requestLimit = 180
-tweetLimit = 100000
-brandList = []
-listFile = open('brand.list', 'r')
-for line in listFile:
-    brandList.append(line.strip())
-listFile.close()
+def collector(fileName):
+    requestLimit = 180
+    #tweetLimit = 100000
+    brandList = []
+    listFile = open(fileName, 'r')
+    for line in listFile:
+        brandList.append(line.strip())
+    listFile.close()
 
-twitter_api = oauth_login()
-requestNum = 0
+    twitter_api = oauth_login()
+    requestNum = 0
 
-for brand in brandList:
-    print 'Collecting tweets for: '+str(brand)
-    tweetIDSet = set()
-    followerFile = open('followers/'+brand+'.json', 'r')
-    outputFile = open('tweets/'+brand+'.json', 'a')
-    for line in followerFile:
-        if len(tweetIDSet) > tweetLimit:
-            break
-        temp = json.loads(line)
-        userID = temp['id']
-        requestNum += 1
-        if requestNum > requestLimit:
-            print 'Wait for 15 mins...'
-            time.sleep(900)
-            requestNum = 1
-        try:
-            response = twitter_api.statuses.user_timeline(user_id=userID, count=200, exclude_replies='true', include_rts='false')
-        except Exception as e:
-            print '['+str(userID)+'] '+str(e)
-            continue
-        for tweet in response:
-            if tweet['id'] not in tweetIDSet:
-                tempOutput = {}
-                tweetIDSet.add(tweet['id'])
-                tempOutput['id'] = tweet['id']
-                tempOutput['coordinates'] = tweet['coordinates']
-                tempOutput['text'] = tweet['text']
-                tempOutput['place'] = tweet['place']
-                tempOutput['entities'] = tweet['entities']
-                tempOutput['created_at'] = tweet['created_at']
-                tempOutput['geo'] = tweet['geo']
-                tempOutput['user'] = userID
-                outputFile.write(json.dumps(tempOutput)+'\n')
+    for brand in brandList:
+        print 'Collecting tweets for: '+str(brand)
+        tweetIDSet = set()
+        followerFile = open('followers/'+brand+'.json', 'r')
+        outputFile = open('data/userTweets/'+brand+'.json', 'a')
+        for line in followerFile:
+            #if len(tweetIDSet) > tweetLimit:
+            #    break
+            temp = json.loads(line)
+            userID = temp['id']
+            requestNum += 1
+            if requestNum > requestLimit:
+                print 'Wait for 15 mins...'
+                time.sleep(900)
+                requestNum = 1
+            try:
+                response = twitter_api.statuses.user_timeline(user_id=userID, count=200, exclude_replies='true', include_rts='false')
+            except Exception as e:
+                print '['+str(userID)+'] '+str(e)
+                continue
+            out = {}
+            out['user'] = userID
+            out['statuses'] = []
+            for tweet in response:
+                if tweet['id'] not in tweetIDSet:
+                    tempOutput = {}
+                    tweetIDSet.add(tweet['id'])
+                    tempOutput['id'] = tweet['id']
+                    tempOutput['coordinates'] = tweet['coordinates']
+                    tempOutput['text'] = tweet['text']
+                    tempOutput['place'] = tweet['place']
+                    tempOutput['entities'] = tweet['entities']
+                    tempOutput['created_at'] = tweet['created_at']
+                    tempOutput['geo'] = tweet['geo']
+                    out['statuses'].append(tempOutput)
+            outputFile.write(json.dumps(out)+'\n')
 
-    outputFile.close()
-    followerFile.close()
+        outputFile.close()
+        followerFile.close()
+
+
+if __name__ == '__main__':
+    collector('lists/popularAccount.list')

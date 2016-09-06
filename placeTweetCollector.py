@@ -109,7 +109,7 @@ def googleTweetCollector(occurrence):
                 placeData[id] = {'name': name, 'lon': lon, 'lat': lat, 'category': category}
             inputFile.close()
 
-            outputFile = open('data/google_place_tweets3.2/'+file.split('.')[0] + '.json', 'a')
+            outputFile = open('data/google_place_tweets3.3/'+file.split('.')[0] + '.json', 'a')
             for id in placeData:
                 requestNum += 1
                 if requestNum > requestLimit:
