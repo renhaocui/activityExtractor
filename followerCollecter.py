@@ -25,10 +25,10 @@ def oauth_login():
     return twitter_api
 
 
-def collector():
+def collector(fileName):
     requestLimit = 15
     brandList = []
-    listFile = open('brand.list', 'r')
+    listFile = open(fileName, 'r')
     for line in listFile:
         brandList.append(line.strip())
     listFile.close()
@@ -75,4 +75,4 @@ def collector():
         recordFile.close()
 
 if __name__ == '__main__':
-    collector()
+    collector('lists/popularAccount.list')
