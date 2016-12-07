@@ -1,9 +1,14 @@
 import subprocess
 import os.path
 import tokenizer
-import ternip
 
-temporalTagger = ternip.recogniser()
+#temporalTagger = ternip.recogniser()
+
+def listToStr(inputList):
+    output = ''
+    for item in inputList:
+        output += item + ', '
+    return output[:-2]
 
 def loadData(dataFile, labelFile):
     data = []
@@ -67,28 +72,31 @@ def temporalExtractor(input):
     return outputList
 
 
-def NERExtractor(inputFile):
-    input = open(inputFile, 'r')
+def NERExtractor():
+    inputFile = open('data/experiment/tweet.ner', 'r')
+    outputFile = open('data/experiment/tweet.ner.key', 'w')
     output = []
-    for line in input:
+    for line in inputFile:
         entities = ''
         words = line.strip().split(' ')
         firstEnt = True
         for word in words:
             items = word.split('/')
             try:
-                if items[1] == 'B-ENTITY':
+                if 'B-' in items[1]:
                     if firstEnt:
-                        entities += items[0]+' '
+                        entities += items[1]+': '+items[0]+' '
                         firstEnt = False
                     else:
-                        entities += ', ' + items[0] + ' '
-                elif items[1] == 'I-ENTITY':
+                        entities += ', ' + items[1]+': ' + items[0] + ' '
+                elif 'I-' in items[1]:
                     entities += items[0] + ' '
             except:
                 print line
+        outputFile.write(entities.strip()+'\n')
         output.append(entities)
-    input.close()
+    outputFile.close()
+    inputFile.close()
     return output
 
 '''
@@ -99,3 +107,4 @@ print POSoutput
 tempOutput = temporalExtractor(sents)
 print tempOutput
 '''
+NERExtractor()

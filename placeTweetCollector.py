@@ -143,4 +143,4 @@ def googleTweetCollector(occurrence):
 
 if __name__ == '__main__':
     #tomtomTweetCollector()
-    googleTweetCollector(10)
+    googleTweetCollector(20)

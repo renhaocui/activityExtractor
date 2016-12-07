@@ -28,22 +28,57 @@ def outputHeads(input):
     return output.strip()
 
 
+def keyExtractor():
+    parseFile = open('data/experiment/tweet.parse', 'r')
+    outputFile = open('data/experiment/tweet.parse.key', 'w')
+    forwardData = {}
+    backwardData = {}
+    index = 0
+    for line in parseFile:
+        if line.strip() != '':
+            words = line.strip().split()
+            forwardData[words[0]] = (words[1], words[6], words[4])
+            backwardData[words[6]] = (words[1], words[0], words[4])
+        else:
+            out = ''
+            for key, value in forwardData.items():
+                if value[2] == 'P':
+                    if value[1] in forwardData:
+                        if key in backwardData:
+                            out += '('+forwardData[value[1]][0] + ' ' + value[0] + ' ' + backwardData[key][0] + '),'
+                            if forwardData[value[1]][1] == '0':
+                                out = out[:-1] + '*,'
+                if value[2] == 'V':
+                    if key in backwardData:
+                        if backwardData[key][2] == 'N':
+                            out += '('+value[0] + ' '+backwardData[key][0]+'),'
+                            if value[1] == '0':
+                                out = out[:-1] + '*,'
+            outputFile.write(out[:-1] + '\n')
+            forwardData = {}
+            backwardData = {}
+            index += 1
+    parseFile.close()
+    outputFile.close()
+
+
+
 def extractor():
-    posInputFile = open('data/experiment/content/total.posContent.predict', 'r')
-    negInputFile = open('data/experiment/content/total.negContent.predict', 'r')
-    posFile = open('data/experiment/ranked/total.pos', 'r')
-    negFile = open('data/experiment/ranked/total.neg', 'r')
-    posLengthFile = open('data/experiment/parser/parserLength.pos', 'w')
-    negLengthFile = open('data/experiment/parser/parserLength.neg', 'w')
-    posHeadCountFile = open('data/experiment/parser/parserHeadCount.pos', 'w')
-    negHeadCountFile = open('data/experiment/parser/parserHeadCount.neg', 'w')
-    posPOSCountFile = open('data/experiment/parser/parserPOSCount.pos', 'w')
-    negPOSCountFile = open('data/experiment/parser/parserPOSCount.neg', 'w')
+    posInputFile = open('dataset/experiment/content/total.posContent.predict', 'r')
+    negInputFile = open('dataset/experiment/content/total.negContent.predict', 'r')
+    posFile = open('dataset/experiment/ranked/total.pos', 'r')
+    negFile = open('dataset/experiment/ranked/total.neg', 'r')
+    posLengthFile = open('dataset/experiment/parser/parserLength.pos', 'w')
+    negLengthFile = open('dataset/experiment/parser/parserLength.neg', 'w')
+    posHeadCountFile = open('dataset/experiment/parser/parserHeadCount.pos', 'w')
+    negHeadCountFile = open('dataset/experiment/parser/parserHeadCount.neg', 'w')
+    posPOSCountFile = open('dataset/experiment/parser/parserPOSCount.pos', 'w')
+    negPOSCountFile = open('dataset/experiment/parser/parserPOSCount.neg', 'w')
 
     tempData = {}
     tempOutput = {}
     posCount = {'N': 0, 'V': 0, 'A': 0}
-    negLength = []
+
     posData = []
     negData = []
     for line in posFile:
@@ -95,7 +130,7 @@ def extractor():
             negLengthFile.write(str(longLen) + ' :: ' + negData[index] + '\n')
             negHeadCountFile.write(str(len(outputHeads(tempOutput).split())) + ' :: ' + negData[index] + '\n')
             negPOSCountFile.write(str(posCount['N']) + ' ' + str(posCount['V']) + ' ' + str(posCount['A']) + ' :: ' + negData[index] + '\n')
-            negLength.append(longLen)
+
             tempData = {}
             tempOutput = {}
             posCount = {'N': 0, 'V': 0, 'A': 0}
@@ -110,4 +145,4 @@ def extractor():
 
 
 if __name__ == '__main__':
-    extractor()
+    keyExtractor()

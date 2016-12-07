@@ -5,8 +5,8 @@ def GoogleLabeller(inFileDir):
     idSet = set()
     placeType = {}
     googlePlaceCategory = {}
-    outputFilePOI = open('data/place_labelled_tweet/poi_tweet.json', 'w')
-    outputFileNB = open('data/place_labelled_tweet/neighborhood_tweet.json', 'w')
+    outputFilePOI = open('data/place_labelled_tweet/poi_tweet(google2).json', 'w')
+    outputFileNB = open('data/place_labelled_tweet/neighborhood_tweet(google2).json', 'w')
     for file in os.listdir(inFileDir):
         inputFile = open(inFileDir+'/'+file, 'r')
         google_category = file.split('.')[0]
@@ -103,6 +103,6 @@ def TomTomLabeller():
 
 
 if __name__ == "__main__":
-    GoogleLabeller("data/google_place_tweets3.1")
+    #GoogleLabeller("data/google_place_tweets2")
     #TomTomLabeller()
-    #dataMerger('data/place_labelled_tweet/poi_tweet(google).json', 'data/place_labelled_tweet/poi_tweet(google2).json')
+    dataMerger('data/place_labelled_tweet/poi_tweet(google).json', 'data/place_labelled_tweet/poi_tweet(google2).json')
