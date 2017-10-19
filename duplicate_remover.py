@@ -1,6 +1,6 @@
 __author__ = 'rencui'
-import json
-import tokenizer
+from utilities import tokenizer
+
 
 def lcsLen(a, b):
     table = [[0] * (len(b) + 1) for _ in xrange(len(a) + 1)]

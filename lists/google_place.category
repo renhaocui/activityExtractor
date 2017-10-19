@@ -16,7 +16,6 @@ cafe
 museum
 park
 casino
-church
 pharmacy
 clothing_store
 convenience_store
@@ -34,3 +33,4 @@ transit_station
 university
 zoo
 gym
+#church
