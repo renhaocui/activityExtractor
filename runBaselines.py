@@ -87,47 +87,17 @@ def extractPOS(inputList, mode='all', breakEmoji=True):
     return contentOutput.lower().strip().encode('utf-8'), posOutput.strip().encode('utf-8')
 
 
-def loadData(modelName, char, embedding, hashtag):
-    activityList = []
-    activityListFile = open('lists/google_place_activity_' + modelName + '.list', 'r')
-    for line in activityListFile:
-        if not line.startswith('NONE'):
-            activityList.append(line.strip())
-    activityListFile.close()
-    placeList = []
-    placeListFile = open('lists/google_place_long.category', 'r')
-    for line in placeListFile:
-        if not line.startswith('#'):
-            placeList.append(line.strip())
-    placeListFile.close()
-
+def loadData(modelName, char, embedding):
+    print('Loading...')
     contents = []
     labels = []
     places = []
-    idTagMapper = {}
-    for index, place in enumerate(placeList):
-        #print('PLACE: '+place)
-        activity = activityList[index]
-        if hashtag:
-            POSFile = open('data/POS/' + place + '.pos', 'r')
-        else:
-            POSFile = open('data/POSnew/' + place + '.pos', 'r')
-        for line in POSFile:
-            data = json.loads(line.strip())
-            idTagMapper[data['id']] = data['tag']
-        POSFile.close()
-
-        tweetFile = open('data/POIplace/' + place + '.json', 'r')
-        for line in tweetFile:
-            data = json.loads(line.strip())
-            if len(data['text']) > charLengthLimit:
-                id = data['id']
-                # content = data['text'].replace('\n', ' ').replace('\r', ' ').encode('utf-8').lower()
-                content, pos = extractPOS(idTagMapper[id], mode='all', breakEmoji=True)
-                contents.append(content)
-                labels.append(activity)
-                places.append(place)
-        tweetFile.close()
+    dataFile = open('data/consolidateData_'+modelName+'.json', 'r')
+    for line in dataFile:
+        data = json.loads(line.strip())
+        contents.append(data['content'].encode('utf-8'))
+        labels.append(data['label'])
+        places.append(data['place'])
 
     if char:
         tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
@@ -138,7 +108,6 @@ def loadData(modelName, char, embedding, hashtag):
     tweetVector = sequence.pad_sequences(tweetSequences, maxlen=tweetLength, truncating='post', padding='post')
 
     if embedding == 'glove':
-        print ('Loading glove embeddings...')
         embeddings_index = {}
         embFile = open('../tweetEmbeddingData/glove.twitter.27B.200d.txt', 'r')
         for line in embFile:
@@ -166,13 +135,15 @@ def loadData(modelName, char, embedding, hashtag):
         embMatrix = None
         word_index = None
 
-    return placeList, activityList, labels, places, contents, idTagMapper, tweetVector, embMatrix, word_index
+    places = np.array(places)
+
+    return labels, places, contents, tweetVector, embMatrix, word_index
 
 
-def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, hashtag=True, epochs=4, tune=False):
-    placeList, activityList, labels, places, contents, idTagMapper, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding, hashtag)
+def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
+    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
-    labelNum = len(np.unique(activityList))
+    labelNum = len(np.unique(labels))
     labels = np.array(labels)
     encoder = LabelEncoder()
     encoder.fit(labels)
@@ -181,9 +152,12 @@ def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, 
     labelFile = open('result/LSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
-    places = np.array(places)
 
     # training
+    if tune:
+        verbose = 2
+    else:
+        verbose = 0
     print('training...')
     resultFile = open('result/LSTM.' + modelName + '_' + balancedWeight + '.result', 'a')
     score = 0.0
@@ -224,12 +198,21 @@ def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, 
 
         if balancedWeight == 'sample':
             sampleWeight = compute_sample_weight('balanced', labels_train)
-            model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, validation_data=(tweet_test, labelVector_test), sample_weight=sampleWeight, verbose=0)
+            trainHistory = model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, validation_data=(tweet_test, labelVector_test), sample_weight=sampleWeight, verbose=verbose)
         elif balancedWeight == 'class':
             classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, validation_data=(tweet_test, labelVector_test), class_weight=classWeight, verbose=0)
+            trainHistory = model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, validation_data=(tweet_test, labelVector_test), class_weight=classWeight, verbose=verbose)
         else:
-            model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, validation_data=(tweet_test, labelVector_test), verbose=2)
+            trainHistory = model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, validation_data=(tweet_test, labelVector_test), verbose=verbose)
+
+        accuracyHist = trainHistory.history['val_acc']
+        lossHist = trainHistory.history['val_loss']
+
+        tuneFile = open('result/LSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        for index, loss in enumerate(lossHist):
+            tuneFile.write(str(index) + '\t' + str(loss)+'\t'+str(accuracyHist[index])+'\n')
+        tuneFile.write('\n')
+        tuneFile.close()
 
         scores = model.evaluate(tweet_test, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
@@ -271,10 +254,10 @@ def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, 
     resultFile.close()
 
 
-def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False, hashtag=True, epochs=4, tune=False):
-    placeList, activityList, labels, places, contents, idTagMapper, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding, hashtag)
+def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
+    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
-    labelNum = len(np.unique(activityList))
+    labelNum = len(np.unique(labels))
     labels = np.array(labels)
     encoder = LabelEncoder()
     encoder.fit(labels)
@@ -326,7 +309,7 @@ def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False
             model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
         elif balancedWeight == 'class':
             classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=0)
+            model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=2)
         else:
             model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, verbose=2)
 
@@ -371,10 +354,10 @@ def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False
     resultFile.close()
 
 
-def processAttLSTM(modelName, balancedWeight='None', embedding='None', hashtag=True, char=False, epochs=4, tune=False):
-    placeList, activityList, labels, places, contents, idTagMapper, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding, hashtag)
+def processAttLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
+    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
-    labelNum = len(np.unique(activityList))
+    labelNum = len(np.unique(labels))
     labels = np.array(labels)
     encoder = LabelEncoder()
     encoder.fit(labels)
@@ -440,7 +423,7 @@ def processAttLSTM(modelName, balancedWeight='None', embedding='None', hashtag=T
             model.fit([tweet_train, tweet_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
         elif balancedWeight == 'class':
             classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            model.fit([tweet_train, tweet_train], labelVector_train, epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=0)
+            model.fit([tweet_train, tweet_train], labelVector_train, validation_data=([tweet_test, tweet_test], labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=2)
         else:
             model.fit([tweet_train, tweet_train], labelVector_train, validation_data=([tweet_test, tweet_test], labelVector_test), epochs=epochs, batch_size=batch_size, verbose=2)
 
@@ -484,10 +467,10 @@ def processAttLSTM(modelName, balancedWeight='None', embedding='None', hashtag=T
     resultFile.close()
 
 
-def processCNNLSTM(modelName, balancedWeight='None', embedding='None', hashtag=True, char=False, epochs=4, tune=False):
-    placeList, activityList, labels, places, contents, idTagMapper, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding, hashtag)
+def processCNNLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
+    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
-    labelNum = len(np.unique(activityList))
+    labelNum = len(np.unique(labels))
     labels = np.array(labels)
     encoder = LabelEncoder()
     encoder.fit(labels)
@@ -541,7 +524,7 @@ def processCNNLSTM(modelName, balancedWeight='None', embedding='None', hashtag=T
             model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
         elif balancedWeight == 'class':
             classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=0)
+            model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=2)
         else:
             model.fit(tweet_train, labelVector_train,
                       validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, verbose=2)
@@ -787,10 +770,15 @@ def processLSTMCNN(modelName, balancedWeight='None', embedding='None', char=Fals
 '''
 
 if __name__ == "__main__":
-    #processLSTM('long1.5', 'none', 'glove', char=False, hashtag=False, epochs=100, tune=True)
+    processLSTM('long1.5', 'none', 'glove', char=False, epochs=9, tune=False)
+    processLSTM('long1.5', 'class', 'glove', char=False, epochs=6, tune=False)
 
-    #processBiLSTM('long1.5', 'none', 'glove', char=False, hashtag=False, epochs=6, tune=False)
+    #processBiLSTM('long1.5', 'none', 'glove', char=False, epochs=5, tune=False)
+    ## re-run the following one from tuning
+    #processBiLSTM('long1.5', 'class', 'glove', char=False, epochs=5, tune=False)
 
-    #processCNNLSTM('long1.5', 'none', 'glove', char=False, hashtag=False, epochs=10, tune=False)
+    #processCNNLSTM('long1.5', 'none', 'glove', char=False, epochs=10, tune=False)
+    #processCNNLSTM('long1.5', 'class', 'glove', char=False, epochs=10, tune=False)
 
-    processAttLSTM('long1.5', 'none', 'glove', char=False, hashtag=False, epochs=5, tune=False)
+    #processAttLSTM('long1.5', 'none', 'glove', char=False, epochs=4, tune=False)
+    #processAttLSTM('long1.5', 'class', 'glove', char=False, epochs=9, tune=False)

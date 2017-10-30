@@ -12,3 +12,4 @@ model/*
 result/*
 *.pyc
 consolidated data/*
+newData/*

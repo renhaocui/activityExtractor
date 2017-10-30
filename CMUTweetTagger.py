@@ -4,6 +4,7 @@ from difflib import SequenceMatcher
 import sys
 reload(sys)
 sys.setdefaultencoding('utf8')
+load()
 
 RUN_TAGGER_CMD = "java -XX:ParallelGCThreads=2 -Xmx1000m -jar utilities/ark-tweet-nlp-0.3.2.jar"
 
@@ -78,7 +79,6 @@ def combineContents(inputLists):
 
 
 def processTweetTag(hashtag=True):
-    load()
     placeList = []
     placeListFile = open('lists/google_place_long.category', 'r')
     for line in placeListFile:
@@ -114,14 +114,14 @@ def processTweetTag(hashtag=True):
         output = runtagger_parse(contents)
         if len(contents) != len(output):
             print('ERROR')
-        outFile = open('data/POSnew/'+place+'.pos', 'w')
-        for index, out in enumerate(output):
-            outFile.write(json.dumps({'id': ids[index], 'tag': out})+'\n')
-        outFile.close()
+        else:
+            outFile = open('data/POSnew/'+place+'.pos', 'w')
+            for index, out in enumerate(output):
+                outFile.write(json.dumps({'id': ids[index], 'tag': out})+'\n')
+            outFile.close()
 
 
 def processHistTag(hashtag=True, maxHistNum=5):
-    load()
     placeList = []
     placeListFile = open('lists/google_place_long.category', 'r')
     for line in placeListFile:
@@ -129,7 +129,6 @@ def processHistTag(hashtag=True, maxHistNum=5):
             placeList.append(line.strip())
     placeListFile.close()
 
-    #placeList=['bar', 'department_store', 'stadium']
     for index, place in enumerate(placeList):
         print(place)
         histFile = open('data/POIHistClean/' + place + '.json', 'r')
@@ -159,8 +158,7 @@ def processHistTag(hashtag=True, maxHistNum=5):
                                     outContent += temp + ' '
                     contents.append(outContent.strip())
         outputs = runtagger_parse(contents)
-        print len(contents)
-        print len(outputs)
+
         if len(contents) != len(outputs):
             predictions = combineContents(outputs)
             idIndex = 0
