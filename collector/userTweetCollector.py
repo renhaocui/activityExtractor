@@ -107,6 +107,16 @@ def extractor(fileName):
         outFile.close()
 
 
+def clean(fileName):
+    brandList = []
+    listFile = open(fileName, 'r')
+    for line in listFile:
+        if not line.startswith('#'):
+            brandList.append(line.strip())
+    listFile.close()
+
+
+
 if __name__ == '__main__':
     collector('lists/popularAccount2.list')
     #extractor('lists/popularAccount.list')

@@ -78,6 +78,11 @@ def combineContents(inputLists):
     return contentOutput
 
 
+def sortTweetbyID(inputList, num=6):
+    sorted_list = sorted(inputList, key=lambda k: k['id'], reverse=True)
+    return sorted_list[:num]
+
+
 def processTweetTag(hashtag=True):
     placeList = []
     placeListFile = open('lists/google_place_long.category', 'r')
@@ -121,7 +126,7 @@ def processTweetTag(hashtag=True):
             outFile.close()
 
 
-def processHistTag(hashtag=True, maxHistNum=5):
+def processHistTag(hashtag=True, maxHistNum=10):
     placeList = []
     placeListFile = open('lists/google_place_long.category', 'r')
     for line in placeListFile:
@@ -132,13 +137,12 @@ def processHistTag(hashtag=True, maxHistNum=5):
     for index, place in enumerate(placeList):
         print(place)
         histFile = open('data/POIHistClean/' + place + '.json', 'r')
-        outFile = open('data/POShistClean/' + place + '.pos', 'w')
         contents = []
         ids = []
         for line in histFile:
             histData = json.loads(line.strip())
             if len(histData['statuses']) > 1:
-                tweetID = histData['max_id']
+                #tweetID = histData['max_id']
                 for i in range(min(maxHistNum, len(histData['statuses'])-1)):
                     tweet = histData['statuses'][i + 1]
                     content = removeLinks(tweet['text']).replace('\n', ' ').replace('\r', ' ').replace('#', ' #')
@@ -159,6 +163,8 @@ def processHistTag(hashtag=True, maxHistNum=5):
                     contents.append(outContent.strip())
         outputs = runtagger_parse(contents)
 
+        outFile = open('data/POShistCleanMax_100_0.7/' + place + '.pos', 'w')
+        print(str(len(outputs))+'/'+str(len(contents)))
         if len(contents) != len(outputs):
             predictions = combineContents(outputs)
             idIndex = 0
@@ -195,6 +201,90 @@ def processHistTag(hashtag=True, maxHistNum=5):
         outFile.close()
 
 
+def processUserTweetTag(fileName, hashtag=True):
+    brandList = []
+    listFile = open(fileName, 'r')
+    for line in listFile:
+        if not line.startswith('#'):
+            brandList.append(line.strip())
+    listFile.close()
+
+    for brand in brandList:
+        print(brand)
+        userIDList = []
+        tweetIDList = []
+        contents = []
+        inputFile = open('data/userTweets2/clean/' + brand + '.json', 'r')
+        outFile = open('data/userTweets2/clean/' + brand + '.pos', 'w')
+        for line in inputFile:
+            userData = json.loads(line.strip())
+            if len(userData['statuses']) > 5:
+                user_id = userData['user_id']
+                tweets = sortTweetbyID(userData['statuses'], num=6)
+                for tweet in tweets:
+                    content = removeLinks(tweet['text']).replace('\n', ' ').replace('\r', ' ').replace('#', ' #')
+                    tweetID = tweet['id']
+                    tweetIDList.append(tweetID)
+                    userIDList.append(user_id)
+                    if hashtag:
+                        outContent = content
+                    else:
+                        outContent = ''
+                        for temp in content.split(' '):
+                            if temp != '':
+                                if temp.startswith('#'):
+                                    segTemp = segment(temp[1:])
+                                    for seg in segTemp:
+                                        outContent += seg + ' '
+                                else:
+                                    outContent += temp + ' '
+                    contents.append(outContent.strip())
+        print ('Running CMU Tagger...')
+        outputs = runtagger_parse(contents)
+
+        print ('Aligning tagged outputs...')
+        if len(contents) != len(outputs):
+            predictions = combineContents(outputs)
+            idIndex = 0
+            predIndex = 0
+            count = 0
+            outputDict = {}
+            while True:
+                contentTemp = contents[idIndex].replace(' ', '').replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&').encode('unicode-escape')
+                predTemp = predictions[predIndex].encode('unicode-escape')
+                score = SequenceMatcher(None, contentTemp, predTemp).ratio()
+                if score > 0.7:
+                    if userIDList[idIndex] not in outputDict:
+                        outputDict[userIDList[idIndex]] = [{'id': tweetIDList[idIndex], 'tag': outputs[predIndex]}]
+                    else:
+                        outputDict[userIDList[idIndex]].append({'id': tweetIDList[idIndex], 'tag': outputs[predIndex]})
+                    count += 1
+                    predIndex += 1
+                    idIndex += 1
+                else:
+                    idIndex += 1
+                if idIndex >= len(contents) or predIndex >= len(predictions):
+                    break
+            if count != len(outputs):
+                print('ERROR')
+            else:
+                for userID, value in outputDict.items():
+                    outFile.write(json.dumps({userID: value})+'\n')
+        else:
+            outDict = {}
+            for index, out in enumerate(outputs):
+                userID = userIDList[index]
+                if userID not in outDict:
+                    outDict[userID] = [{'id': tweetIDList[index], 'tag': out}]
+                else:
+                    outDict[userID].append({'id': tweetIDList[index], 'tag': out})
+            for userID, value in outDict:
+                outFile.write(json.dumps({userID: value})+'\n')
+        outFile.close()
+
+
+
 if __name__ == "__main__":
     #processTweetTag(hashtag=False)
-    processHistTag(hashtag=False, maxHistNum=5)
+    processHistTag(hashtag=False, maxHistNum=100)
+    #processUserTweetTag('lists/popularAccount2.list', hashtag=False)

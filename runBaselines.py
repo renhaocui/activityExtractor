@@ -6,13 +6,14 @@ from keras.models import Model
 from keras.preprocessing import sequence
 from keras.preprocessing.text import Tokenizer
 from keras.utils import np_utils
-from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_sample_weight, compute_class_weight
 from utilities import word2vecReader
-from sklearn.metrics import precision_score, recall_score, f1_score
 from wordsegment import load
+import sys, evaluation
+reload(sys)
+sys.setdefaultencoding('utf8')
 
 vocabSize = 10000
 tweetLength = 25
@@ -92,12 +93,14 @@ def loadData(modelName, char, embedding):
     contents = []
     labels = []
     places = []
+    ids = []
     dataFile = open('data/consolidateData_'+modelName+'.json', 'r')
     for line in dataFile:
         data = json.loads(line.strip())
         contents.append(data['content'].encode('utf-8'))
         labels.append(data['label'])
         places.append(data['place'])
+        ids.append(str(data['id']))
 
     if char:
         tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
@@ -136,12 +139,13 @@ def loadData(modelName, char, embedding):
         word_index = None
 
     places = np.array(places)
+    ids = np.array(ids)
 
-    return labels, places, contents, tweetVector, embMatrix, word_index
+    return ids, labels, places, contents, tweetVector, embMatrix, word_index
 
 
 def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
-    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
+    ids, labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
@@ -159,12 +163,7 @@ def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, 
     else:
         verbose = 0
     print('training...')
-    resultFile = open('result/LSTM.' + modelName + '_' + balancedWeight + '.result', 'a')
-    score = 0.0
-    precision = 0.0
-    recall = 0.0
-    f1 = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
+    eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
         tweet_train = tweetVector[train_index]
@@ -184,6 +183,7 @@ def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, 
         labels_test = labels[test_index]
         contents_test = np.array(contents)[test_index]
         places_test = places[test_index]
+        ids_test = ids[test_index]
 
         if len(labels_train) % batch_size != 0:
             tweet_train = tweet_train[:-(len(tweet_train) % batch_size)]
@@ -192,6 +192,7 @@ def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, 
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
             places_test = places_test[:-(len(places_test) % batch_size)]
+            ids_test = ids_test[:-(len(ids_test) % batch_size)]
 
         labelVector_train = np_utils.to_categorical(encoder.transform(labels_train))
         labelVector_test = np_utils.to_categorical(encoder.transform(labels_test))
@@ -216,46 +217,48 @@ def processLSTM(modelName, balancedWeight='None', embedding='None', char=False, 
 
         scores = model.evaluate(tweet_test, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
-        score += scores[1] * 100
         predictions = model.predict(tweet_test, batch_size=batch_size)
         sampleFile = open('result/LSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
+            sampleFile.write(ids_test[index] + '\t' + contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
             predLabels.append(predLabel)
         sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
+
+        eval.addEval(scores[1], labels_test, predLabels)
         if tune:
             break
 
-    sumConMatrix = np.divide(sumConMatrix, 5)
-    confusionFile = open('result/LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
-        lineOut = ''
-        for line in row:
-            lineOut += str(line) + '\t'
-        confusionFile.write(lineOut.strip() + '\n')
-    confusionFile.write('\n')
-    confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall * 100 / 5)
-    print(precision*100 / 5)
-    print(f1*100 / 5)
-    resultFile.close()
+    if not tune:
+        score, scoreSTD = eval.getScore()
+        precision, preSTD = eval.getPrecision()
+        recall, recSTD = eval.getRecall()
+        f1, f1STD = eval.getF1()
+        conMatrix = eval.getConMatrix()
+        resultFile = open('result/LSTM.' + modelName + '_' + balancedWeight + '.result', 'a')
+        confusionFile = open('result/LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
+        for row in conMatrix:
+            lineOut = ''
+            for line in row:
+                lineOut += str(line) + '\t'
+            confusionFile.write(lineOut.strip() + '\n')
+        confusionFile.write('\n')
+        resultFile.write(score + '\t' + scoreSTD + '\n')
+        resultFile.write(recall + '\t' + recSTD + '\n')
+        resultFile.write(precision + '\t' + preSTD + '\n')
+        resultFile.write(f1 + '\t' + f1STD + '\n\n')
+        confusionFile.close()
+        resultFile.close()
+        print(score + ' ' + scoreSTD)
+        print(recall + ' ' + recSTD)
+        print(precision + ' ' + preSTD)
+        print(f1 + ' ' + f1STD)
+
 
 
 def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
-    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
+    ids, labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
@@ -266,16 +269,14 @@ def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False
     labelFile = open('result/BiLSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
-    places = np.array(places)
 
     # training
+    if tune:
+        verbose = 2
+    else:
+        verbose = 0
     print('training...')
-    resultFile = open('result/BiLSTM.' + modelName + '_' + balancedWeight + '.result', 'a')
-    score = 0.0
-    precision = 0.0
-    recall = 0.0
-    f1 = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
+    eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
         inputs = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
@@ -293,6 +294,8 @@ def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False
         tweet_test = tweetVector[test_index]
         labels_test = labels[test_index]
         contents_test = np.array(contents)[test_index]
+        places_test = places[test_index]
+        ids_test = ids[test_index]
 
         if len(labels_train) % batch_size != 0:
             tweet_train = tweet_train[:-(len(tweet_train) % batch_size)]
@@ -300,62 +303,72 @@ def processBiLSTM(modelName, balancedWeight='None', embedding='None', char=False
         if len(labels_test) % batch_size != 0:
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
+            places_test = places_test[:-(len(places_test) % batch_size)]
+            ids_test = ids_test[:-(len(ids_test) % batch_size)]
 
         labelVector_train = np_utils.to_categorical(encoder.transform(labels_train))
         labelVector_test = np_utils.to_categorical(encoder.transform(labels_test))
 
         if balancedWeight == 'sample':
             sampleWeight = compute_sample_weight('balanced', labels_train)
-            model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
+            trainHistory = model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
         elif balancedWeight == 'class':
             classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=2)
+            trainHistory = model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=verbose)
         else:
-            model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, verbose=2)
+            trainHistory = model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, verbose=verbose)
+
+        accuracyHist = trainHistory.history['val_acc']
+        lossHist = trainHistory.history['val_loss']
+
+        tuneFile = open('result/BiLSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        for index, loss in enumerate(lossHist):
+            tuneFile.write(str(index) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
+        tuneFile.write('\n')
+        tuneFile.close()
 
         scores = model.evaluate(tweet_test, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-        score += scores[1] * 100
         predictions = model.predict(tweet_test, batch_size=batch_size)
         sampleFile = open('result/BiLSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\n')
+            sampleFile.write(ids_test[index] + '\t' + contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
             predLabels.append(predLabel)
         sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
+        eval.addEval(scores[1], labels_test, predLabels)
         if tune:
             break
 
-    sumConMatrix = np.divide(sumConMatrix, 5)
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open('result/BiLSTM.' + modelName + '_' + balancedWeight + '.result', 'a')
     confusionFile = open('result/BiLSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
+    for row in conMatrix:
         lineOut = ''
         for line in row:
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
     confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall*100 / 5)
-    print(precision*100 / 5)
-    print(f1*100 / 5)
     resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
 
 
 def processAttLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
-    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
+    ids, labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
@@ -366,16 +379,14 @@ def processAttLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
     labelFile = open('result/AttLSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
-    places = np.array(places)
 
     # training
+    if tune:
+        verbose = 2
+    else:
+        verbose = 0
     print('training...')
-    score = 0.0
-    f1 = 0.0
-    precision = 0.0
-    recall = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
-    resultFile = open('result/AttLSTM_'+modelName+'_'+balancedWeight+'.result', 'a')
+    eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
         tweet_input1 = Input(batch_shape=(batch_size, tweetLength,))
@@ -407,6 +418,8 @@ def processAttLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
         tweet_test = tweetVector[test_index]
         labels_test = labels[test_index]
         contents_test = np.array(contents)[test_index]
+        places_test = places[test_index]
+        ids_test = ids[test_index]
 
         if len(labels_train) % batch_size != 0:
             tweet_train = tweet_train[:-(len(tweet_train) % batch_size)]
@@ -414,61 +427,72 @@ def processAttLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
         if len(labels_test) % batch_size != 0:
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
+            places_test = places_test[:-(len(places_test) % batch_size)]
+            ids_test = ids_test[:-(len(ids_test) % batch_size)]
 
         labelVector_train = np_utils.to_categorical(encoder.transform(labels_train))
         labelVector_test = np_utils.to_categorical(encoder.transform(labels_test))
 
         if balancedWeight == 'sample':
             sampleWeight = compute_sample_weight('balanced', labelVector_train)
-            model.fit([tweet_train, tweet_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
+            trainHistory = model.fit([tweet_train, tweet_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
         elif balancedWeight == 'class':
             classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            model.fit([tweet_train, tweet_train], labelVector_train, validation_data=([tweet_test, tweet_test], labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=2)
+            trainHistory = model.fit([tweet_train, tweet_train], labelVector_train, validation_data=([tweet_test, tweet_test], labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=verbose)
         else:
-            model.fit([tweet_train, tweet_train], labelVector_train, validation_data=([tweet_test, tweet_test], labelVector_test), epochs=epochs, batch_size=batch_size, verbose=2)
+            trainHistory = model.fit([tweet_train, tweet_train], labelVector_train, validation_data=([tweet_test, tweet_test], labelVector_test), epochs=epochs, batch_size=batch_size, verbose=verbose)
+
+        accuracyHist = trainHistory.history['val_acc']
+        lossHist = trainHistory.history['val_loss']
+
+        tuneFile = open('result/AttLSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        for index, loss in enumerate(lossHist):
+            tuneFile.write(str(index) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
+        tuneFile.write('\n')
+        tuneFile.close()
 
         scores = model.evaluate([tweet_test, tweet_test], labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
-        score += scores[1] * 100
+
         predictions = model.predict([tweet_test, tweet_test], batch_size=batch_size)
         sampleFile = open('result/AttLSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\n')
+            sampleFile.write(ids_test[index] + '\t' + contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
             predLabels.append(predLabel)
         sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
+        eval.addEval(scores[1], labels_test, predLabels)
         if tune:
             break
 
-    sumConMatrix = np.divide(sumConMatrix, 5)
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open('result/AttLSTM_' + modelName + '_' + balancedWeight + '.result', 'a')
     confusionFile = open('result/AttLSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
+    for row in conMatrix:
         lineOut = ''
         for line in row:
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
     confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall*100 / 5)
-    print(precision*100 / 5)
-    print(f1*100 / 5)
     resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
 
 
 def processCNNLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, tune=False):
-    labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
+    ids, labels, places, contents, tweetVector, embMatrix, word_index = loadData(modelName, char, embedding)
 
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
@@ -479,16 +503,14 @@ def processCNNLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
     labelFile = open('result/LSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
-    places = np.array(places)
 
     # training
+    if tune:
+        verbose = 2
+    else:
+        verbose = 0
     print('training...')
-    score = 0.0
-    f1 = 0.0
-    precision = 0.0
-    recall = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
-    resultFile = open('result/CNNLSTM_'+modelName+'_'+balancedWeight+'.result', 'a')
+    eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
         input = Input(batch_shape=(batch_size, tweetLength, ))
@@ -508,6 +530,8 @@ def processCNNLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
         tweet_test = tweetVector[test_index]
         labels_test = labels[test_index]
         contents_test = np.array(contents)[test_index]
+        places_test = places[test_index]
+        ids_test = ids[test_index]
 
         if len(labels_train) % batch_size != 0:
             tweet_train = tweet_train[:-(len(tweet_train) % batch_size)]
@@ -515,58 +539,69 @@ def processCNNLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
         if len(labels_test) % batch_size != 0:
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
+            places_test = places_test[:-(len(places_test) % batch_size)]
+            ids_test = ids_test[:-(len(ids_test) % batch_size)]
 
         labelVector_train = np_utils.to_categorical(encoder.transform(labels_train))
         labelVector_test = np_utils.to_categorical(encoder.transform(labels_test))
 
         if balancedWeight == 'sample':
             sampleWeight = compute_sample_weight('balanced', labels_train)
-            model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
+            trainHistory = model.fit(tweet_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
         elif balancedWeight == 'class':
             classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=2)
+            trainHistory = model.fit(tweet_train, labelVector_train, validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=verbose)
         else:
-            model.fit(tweet_train, labelVector_train,
-                      validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, verbose=2)
+            trainHistory = model.fit(tweet_train, labelVector_train,
+                      validation_data=(tweet_test, labelVector_test), epochs=epochs, batch_size=batch_size, verbose=verbose)
+
+        accuracyHist = trainHistory.history['val_acc']
+        lossHist = trainHistory.history['val_loss']
+
+        tuneFile = open('result/CNNLSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        for index, loss in enumerate(lossHist):
+            tuneFile.write(str(index) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
+        tuneFile.write('\n')
+        tuneFile.close()
 
         scores = model.evaluate(tweet_test, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
-        score += scores[1] * 100
+
         predictions = model.predict(tweet_test, batch_size=batch_size)
         sampleFile = open('result/CNNLSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\n')
+            sampleFile.write(ids_test[index] + '\t' + contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
             predLabels.append(predLabel)
         sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
+        eval.addEval(scores[1], labels_test, predLabels)
         if tune:
             break
 
-    sumConMatrix = np.divide(sumConMatrix, 5)
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open('result/CNNLSTM_' + modelName + '_' + balancedWeight + '.result', 'a')
     confusionFile = open('result/CNNLSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
+    for row in conMatrix:
         lineOut = ''
         for line in row:
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
     confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall*100 / 5)
-    print(precision*100 / 5)
-    print(f1*100 / 5)
     resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
 
 '''
 def processLSTMCNN(modelName, balancedWeight='None', embedding='None', char=False, epochs=4):
@@ -770,15 +805,14 @@ def processLSTMCNN(modelName, balancedWeight='None', embedding='None', char=Fals
 '''
 
 if __name__ == "__main__":
-    processLSTM('long1.5', 'none', 'glove', char=False, epochs=9, tune=False)
-    processLSTM('long1.5', 'class', 'glove', char=False, epochs=6, tune=False)
+    processLSTM('long1.5', 'none', 'glove', char=False, epochs=8, tune=False)
+    processLSTM('long1.5', 'class', 'glove', char=False, epochs=8, tune=False)
 
-    #processBiLSTM('long1.5', 'none', 'glove', char=False, epochs=5, tune=False)
-    ## re-run the following one from tuning
+    #processBiLSTM('long1.5', 'none', 'glove', char=False, epochs=4, tune=False)
     #processBiLSTM('long1.5', 'class', 'glove', char=False, epochs=5, tune=False)
 
-    #processCNNLSTM('long1.5', 'none', 'glove', char=False, epochs=10, tune=False)
-    #processCNNLSTM('long1.5', 'class', 'glove', char=False, epochs=10, tune=False)
+    #processAttLSTM('long1.5', 'none', 'glove', char=False, epochs=5, tune=False)
+    #processAttLSTM('long1.5', 'class', 'glove', char=False, epochs=5, tune=False)
 
-    #processAttLSTM('long1.5', 'none', 'glove', char=False, epochs=4, tune=False)
-    #processAttLSTM('long1.5', 'class', 'glove', char=False, epochs=9, tune=False)
+    #processCNNLSTM('long1.5', 'none', 'glove', char=False, epochs=6, tune=False)
+    #processCNNLSTM('long1.5', 'class', 'glove', char=False, epochs=5, tune=False)

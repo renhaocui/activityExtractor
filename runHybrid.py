@@ -7,15 +7,13 @@ from keras.models import Model
 from keras.preprocessing import sequence
 from keras.preprocessing.text import Tokenizer
 from keras.utils import np_utils
-from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_sample_weight, compute_class_weight
-from sklearn.metrics import precision_score, recall_score, f1_score
 from utilities import word2vecReader
 from wordsegment import load, segment
 from utilities import tokenizer
-import sys
+import sys, evaluation
 reload(sys)
 sys.setdefaultencoding('utf8')
 load()
@@ -122,6 +120,7 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
     days = []
     hours = []
     poss = []
+    ids = []
     histContents = {}
     histDayVectors = {}
     histHourVectors = {}
@@ -140,6 +139,7 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
                 contents.append(data['content'].encode('utf-8'))
                 labels.append(data['label'])
                 places.append(data['place'])
+                ids.append(str(data['id']))
                 days.append(np.full((tweetLength), data['day'], dtype='int'))
                 hours.append(np.full((tweetLength), data['hour'], dtype='int'))
                 poss.append(data['pos'].encode('utf-8'))
@@ -155,6 +155,7 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
     days = np.array(days)
     hours = np.array(hours)
     places = np.array(places)
+    ids = np.array(ids)
 
     if char:
         tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
@@ -203,7 +204,7 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
         word_index = None
 
     if not pos:
-        return labels, places, contents, days, hours, tweetVector, histTweetVectors, histDayVectors, histHourVectors, embMatrix, word_index
+        return ids, labels, places, contents, days, hours, tweetVector, histTweetVectors, histDayVectors, histHourVectors, embMatrix, word_index
     else:
         posVocabSize = 25
         tkPOS = Tokenizer(num_words=posVocabSize, filters='', lower=False)
@@ -220,155 +221,11 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
             histPOSVector = sequence.pad_sequences(histPOSSequences, maxlen=tweetLength, truncating='post', padding='post')
             histPOSVectors.append(histPOSVector)
 
-        return labels, places, contents, days, hours, poss, tweetVector, posVector, histTweetVectors, histDayVectors, histHourVectors, histPOSVectors, posVocabSize, embMatrix, word_index
-
-
-def processHistLSTM(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
-    labels, places, contents, dayVectors, hourVectors, tweetVector, histVectors, histDayVectors, histHourVectors, embMatrix, word_index = loadHistData(modelName, char, embedding, histNum=histNum, pos=False)
-
-    labelNum = len(np.unique(labels))
-    labels = np.array(labels)
-    encoder = LabelEncoder()
-    encoder.fit(labels)
-    labelList = encoder.classes_.tolist()
-    print('Labels: ' + str(labelList))
-    labelFile = open('result/C-HistLSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
-    labelFile.write(str(labelList) + '\n')
-    labelFile.close()
-
-    # training
-    if tune:
-        verbose = 2
-    else:
-        verbose = 0
-    print('training...')
-    resultFile = open('result/C-HistLSTM.' + modelName + '_' + balancedWeight + '.result', 'a')
-    score = 0.0
-    precision = 0.0
-    recall = 0.0
-    f1 = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
-        input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
-        if embedding in ['glove', 'word2vec']:
-            shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
-            embedding_tweet = shared_embedding(input_tweet)
-        else:
-            shared_embedding = Embedding(vocabSize, embeddingVectorLength)
-            embedding_tweet = shared_embedding(input_tweet)
-        tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
-
-        conList = [tweet_lstm]
-        inputList = [input_tweet]
-        for i in range(histNum):
-            input_hist = Input(batch_shape=(batch_size, posEmbLength,))
-            embedding_hist = shared_embedding(input_hist)
-            hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
-            conList.append(hist_lstm)
-            inputList.append(input_hist)
-
-        comb = concatenate(conList)
-        output = Dense(labelNum, activation='softmax', name='output')(comb)
-        model = Model(inputs=inputList, outputs=output)
-        #print(model.summary())
-        model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-
-        tweet_train = tweetVector[train_index]
-        labels_train = labels[train_index]
-        tweet_test = tweetVector[test_index]
-        labels_test = labels[test_index]
-        contents_test = np.array(contents)[test_index]
-        places_test = places[test_index]
-        histVector_train = []
-        histVector_test = []
-        for i in range(histNum):
-            histVector_train.append(histVectors[i][train_index])
-            histVector_test.append(histVectors[i][test_index])
-
-        if len(labels_train) % batch_size != 0:
-            tweet_train = tweet_train[:-(len(tweet_train) % batch_size)]
-            labels_train = labels_train[:-(len(labels_train) % batch_size)]
-            for i in range(histNum):
-                histVector_train[i] = histVector_train[i][:-(len(histVector_train[i]) % batch_size)]
-        if len(labels_test) % batch_size != 0:
-            tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
-            labels_test = labels_test[:-(len(labels_test) % batch_size)]
-            places_test = places_test[:-(len(places_test) % batch_size)]
-            for i in range(histNum):
-                histVector_test[i] = histVector_test[i][:-(len(histVector_test[i]) % batch_size)]
-
-        labelVector_train = np_utils.to_categorical(encoder.transform(labels_train))
-        labelVector_test = np_utils.to_categorical(encoder.transform(labels_test))
-
-        trainList = [tweet_train]
-        testList = [tweet_test]
-        for i in range(histNum):
-            trainList.append(histVector_train[i])
-            testList.append(histVector_test[i])
-
-        if balancedWeight == 'sample':
-            sampleWeight = compute_sample_weight('balanced', labels_train)
-            model.fit(trainList, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
-        elif balancedWeight == 'class':
-            classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-            trainHistory = model.fit(trainList, labelVector_train, epochs=epochs, validation_data=(testList, labelVector_test), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
-        else:
-            trainHistory = model.fit(trainList, labelVector_train, epochs=epochs, validation_data=(testList, labelVector_test), batch_size=batch_size, verbose=verbose)
-
-        accuracyHist = trainHistory.history['val_acc']
-        lossHist = trainHistory.history['val_loss']
-
-        tuneFile = open('result/C-HistLSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
-        tuneFile.write('Hist Num: '+str(histNum)+'\n')
-        for index, loss in enumerate(lossHist):
-            tuneFile.write(str(index+1) + '\t' + str(loss)+'\t'+str(accuracyHist[index])+'\n')
-        tuneFile.write('\n')
-        tuneFile.close()
-
-        scores = model.evaluate(testList, labelVector_test, batch_size=batch_size, verbose=0)
-        print("Accuracy: %.2f%%" % (scores[1] * 100))
-
-        score += scores[1] * 100
-        predictions = model.predict(testList, batch_size=batch_size)
-        sampleFile = open('result/C-HistLSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
-        predLabels = []
-        for index, pred in enumerate(predictions):
-            predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
-            predLabels.append(predLabel)
-        sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
-        if tune:
-            break
-
-    sumConMatrix = np.divide(sumConMatrix, 5)
-    confusionFile = open('result/C-HistLSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
-        lineOut = ''
-        for line in row:
-            lineOut += str(line) + '\t'
-        confusionFile.write(lineOut.strip() + '\n')
-    confusionFile.write('\n')
-    confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall * 100 / 5)
-    print(precision * 100 / 5)
-    print(f1 * 100 / 5)
-    resultFile.close()
+        return ids, labels, places, contents, days, hours, poss, tweetVector, posVector, histTweetVectors, histDayVectors, histHourVectors, histPOSVectors, posVocabSize, embMatrix, word_index
 
 
 def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
-    labels, places, contents, dayVector, hourVector, tweetVector, histTweetVectors, histDayVector, histHourVector, embMatrix, word_index = loadHistData(modelName, char, embedding, histNum=histNum, pos=False)
+    ids, labels, places, contents, dayVector, hourVector, tweetVector, histTweetVectors, histDayVector, histHourVector, embMatrix, word_index = loadHistData(modelName, char, embedding, histNum=histNum, pos=False)
 
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
@@ -386,12 +243,8 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
     else:
         verbose = 0
     print('training...')
-    resultFile = open('result/C-Hist-Context-T-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
-    score = 0.0
-    precision = 0.0
-    recall = 0.0
-    f1 = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
+
+    eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
         input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
@@ -443,6 +296,7 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
         labels_test = labels[test_index]
         contents_test = np.array(contents)[test_index]
         places_test = places[test_index]
+        ids_test = ids[test_index]
         histTweetVector_train = []
         histTweetVector_test = []
         histDayVector_train = []
@@ -471,6 +325,7 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
             places_test = places_test[:-(len(places_test) % batch_size)]
+            ids_test = ids_test[:-(len(ids_test) % batch_size)]
             day_test = day_test[:-(len(day_test) % batch_size)]
             hour_test = hour_test[:-(len(hour_test) % batch_size)]
             for i in range(histNum):
@@ -510,46 +365,45 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
         scores = model.evaluate(testList, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-        score += scores[1] * 100
         predictions = model.predict(testList, batch_size=batch_size)
         sampleFile = open('result/C-Hist-Context-T-LSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
+            sampleFile.write(ids_test[index] + '\t' + contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
             predLabels.append(predLabel)
         sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
+        eval.addEval(scores[1], labels_test, predLabels)
         if tune:
             break
 
-    sumConMatrix = np.divide(sumConMatrix, 5)
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open('result/C-Hist-Context-T-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
     confusionFile = open('result/C-Hist-Context-T-LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
+    for row in conMatrix:
         lineOut = ''
         for line in row:
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
     confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall * 100 / 5)
-    print(precision * 100 / 5)
-    print(f1 * 100 / 5)
     resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
 
 
 def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
-    labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(modelName, char, embedding,
+    ids, labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(modelName, char, embedding,
                                                                                                                                                         histNum=histNum, pos=True)
 
     labelNum = len(np.unique(labels))
@@ -568,12 +422,7 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
     else:
         verbose = 0
     print('training...')
-    resultFile = open('result/C-Hist-Context-POS-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
-    score = 0.0
-    precision = 0.0
-    recall = 0.0
-    f1 = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
+    eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
         input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
@@ -619,6 +468,7 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
         labels_test = labels[test_index]
         contents_test = np.array(contents)[test_index]
         places_test = places[test_index]
+        ids_test = ids[test_index]
         histTweetVector_train = []
         histPOSVector_train = []
         histTweetVector_test = []
@@ -641,6 +491,7 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
             places_test = places_test[:-(len(places_test) % batch_size)]
+            ids_test = ids_test[:-(len(ids_test) % batch_size)]
             pos_test = pos_test[:-(len(pos_test) % batch_size)]
             for i in range(histNum):
                 histTweetVector_test[i] = histTweetVector_test[i][:-(len(histTweetVector_test[i]) % batch_size)]
@@ -678,46 +529,45 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
         scores = model.evaluate(testList, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-        score += scores[1] * 100
         predictions = model.predict(testList, batch_size=batch_size)
         sampleFile = open('result/C-Hist-Context-POS-LSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
+            sampleFile.write(ids_test[index] + '\t' + contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
             predLabels.append(predLabel)
         sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
+        eval.addEval(scores[1], labels_test, predLabels)
         if tune:
             break
 
-    sumConMatrix = np.divide(sumConMatrix, 5)
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open('result/C-Hist-Context-POS-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
     confusionFile = open('result/C-Hist-Context-POS-LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
+    for row in conMatrix:
         lineOut = ''
         for line in row:
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
     confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall * 100 / 5)
-    print(precision * 100 / 5)
-    print(f1 * 100 / 5)
     resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
 
 
 def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
-    labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(
+    ids, labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(
         modelName, char, embedding,
         histNum=histNum, pos=True)
 
@@ -737,12 +587,8 @@ def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='Non
     else:
         verbose = 0
     print('training...')
-    resultFile = open('result/C-Hist-Context-POST-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
-    score = 0.0
-    precision = 0.0
-    recall = 0.0
-    f1 = 0.0
-    sumConMatrix = np.zeros([labelNum, labelNum])
+
+    eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
         input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
@@ -802,6 +648,7 @@ def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='Non
         labels_test = labels[test_index]
         contents_test = np.array(contents)[test_index]
         places_test = places[test_index]
+        ids_test = ids[test_index]
         histTweetVector_train = []
         histDayVector_train = []
         histHourVector_train = []
@@ -836,6 +683,7 @@ def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='Non
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
             places_test = places_test[:-(len(places_test) % batch_size)]
+            ids_test = ids_test[:-(len(ids_test) % batch_size)]
             day_test = day_test[:-(len(day_test) % batch_size)]
             hour_test = hour_test[:-(len(hour_test) % batch_size)]
             pos_test = pos_test[:-(len(pos_test) % batch_size)]
@@ -877,55 +725,50 @@ def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='Non
         scores = model.evaluate(testList, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-        score += scores[1] * 100
         predictions = model.predict(testList, batch_size=batch_size)
         sampleFile = open('result/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
-            if index % 100 == 0:
-                sampleFile.write(contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
+            sampleFile.write(ids_test[index] + '\t' + contents_test[index] + '\t' + labels_test[index] + '\t' + predLabel + '\t' + places_test[index] + '\n')
             predLabels.append(predLabel)
         sampleFile.close()
-        precision += precision_score(labels_test, predLabels, average='macro')
-        recall += recall_score(labels_test, predLabels, average='macro')
-        f1 += f1_score(labels_test, predLabels, average='macro')
-        conMatrix = confusion_matrix(labels_test, predLabels)
-        sumConMatrix = np.add(sumConMatrix, conMatrix)
+        eval.addEval(scores[1], labels_test, predLabels)
         if tune:
             break
 
-    sumConMatrix = np.divide(sumConMatrix, 5)
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open('result/C-Hist-Context-POST-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
     confusionFile = open('result/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in sumConMatrix:
+    for row in conMatrix:
         lineOut = ''
         for line in row:
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
     confusionFile.close()
-    resultFile.write(str(score / 5) + '\n')
-    resultFile.write(str(recall * 100 / 5) + '\n')
-    resultFile.write(str(precision * 100 / 5) + '\n')
-    resultFile.write(str(f1 * 100 / 5) + '\n\n')
-    print(score / 5)
-    print(recall * 100 / 5)
-    print(precision * 100 / 5)
-    print(f1 * 100 / 5)
     resultFile.close()
-
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
 
 
 if __name__ == "__main__":
-    #processHistLSTM('long1.5', 'none', 'glove', char=False, histNum=5, epochs=10, tune=False)
-    #processHistLSTM('long1.5', 'class', 'glove', char=False, histNum=4, epochs=14, tune=False)
+    processHistLSTM_contextT('long1.5', 'none', 'glove', char=False, histNum=5, epochs=10, tune=False)
+    processHistLSTM_contextT('long1.5', 'class', 'glove', char=False, histNum=5, epochs=27, tune=False)
 
-    processHistLSTM_contextT('long1.5', 'none', 'glove', char=False, histNum=4, epochs=11, tune=False)
-    processHistLSTM_contextT('long1.5', 'class', 'glove', char=False, histNum=4, epochs=19, tune=False)
+    #processHistLSTM_contextPOS('long1.5', 'none', 'glove', char=False, histNum=5, epochs=25, tune=False)
+    #processHistLSTM_contextPOS('long1.5', 'class', 'glove', char=False, histNum=3, epochs=6, tune=False)
 
-    #processHistLSTM_contextPOS('long1.5', 'none', 'glove', char=False, histNum=4, epochs=16, tune=False)
-    #processHistLSTM_contextPOS('long1.5', 'class', 'glove', char=False, histNum=4, epochs=14, tune=False)
-
-    #processHistLSTM_contextPOST('long1.5', 'none', 'glove', char=False, histNum=5, epochs=20, tune=False)
-    #processHistLSTM_contextPOST('long1.5', 'class', 'glove', char=False, histNum=4, epochs=8, tune=False)
+    #processHistLSTM_contextPOST('long1.5', 'none', 'glove', char=False, histNum=3, epochs=6, tune=False)
+    #processHistLSTM_contextPOST('long1.5', 'class', 'glove', char=False, histNum=5, epochs=10, tune=False)
 

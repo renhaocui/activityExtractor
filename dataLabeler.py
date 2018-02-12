@@ -1,8 +1,6 @@
 import json
 import re
-from wordsegment import load
 
-load()
 charLengthLimit = 20
 dayMapper = {'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0}
 POSMapper = {'N': 'N', 'O': 'N', '^': 'N', 'S': 'N', 'Z': 'N', 'L': 'N', 'M': 'N',
@@ -73,7 +71,7 @@ def removeLinks(input):
     return input
 
 
-def processTweet(modelName, hashtag=True, rules=False):
+def processTweet(modelName, hashtag=False, rules=True):
     activityList = {}
     activityListFile = open('lists/google_place_activity_' + modelName + '.list', 'r')
     for index, line in enumerate(activityListFile):
@@ -96,7 +94,7 @@ def processTweet(modelName, hashtag=True, rules=False):
             placeLabelMapper[place] = activity
             labelCount[activity] = 0.0
             placeCount[place] = 0.0
-    print(placeLabelMapper)
+    #print(placeLabelMapper)
 
     if rules:
         #labelRule[place][word] = label
@@ -111,7 +109,7 @@ def processTweet(modelName, hashtag=True, rules=False):
                 pairs = tempWord.split(',')
                 labelRule[temp[1]][(pairs[0], pairs[1])] = temp[2]
         ruleFile.close()
-        print(labelRule)
+        #print(labelRule)
 
     contents = []
     labels = []
@@ -120,8 +118,9 @@ def processTweet(modelName, hashtag=True, rules=False):
     poss = []
     days = []
     hours = []
+    created = []
     idTagMapper = {}
-    outputFile = open('data/consolidateData_'+modelName+'.json', 'w')
+    outputFile = open('data/consolidateData_'+modelName+'_CreatedAt.json', 'w')
     for place in placeLabelMapper:
         #print('PLACE: '+place)
         if hashtag:
@@ -158,12 +157,13 @@ def processTweet(modelName, hashtag=True, rules=False):
                     places.append(place)
                     days.append(day)
                     hours.append(hour)
+                    created.append(data['created_at'])
                     labelCount[activity] += 1.0
                     placeCount[place] += 1.0
         tweetFile.close()
 
     for index, id in enumerate(ids):
-        outputFile.write(json.dumps({'id': id, 'label': labels[index], 'place': places[index], 'content': contents[index], 'pos': poss[index], 'day': days[index], 'hour': hours[index]})+'\n')
+        outputFile.write(json.dumps({'id': id, 'label': labels[index], 'place': places[index], 'content': contents[index], 'pos': poss[index], 'day': days[index], 'hour': hours[index], 'created_at': created[index]})+'\n')
     outputFile.close()
     out1 = ''
     out2 = ''
@@ -175,7 +175,7 @@ def processTweet(modelName, hashtag=True, rules=False):
     print(placeCount)
 
 
-def processHist(modelName, histNum=5):
+def processHist(modelName, histNumMin=1, histNumMax=50):
     activityList = {}
     activityListFile = open('lists/google_place_activity_' + modelName + '.list', 'r')
     for index, line in enumerate(activityListFile):
@@ -194,7 +194,69 @@ def processHist(modelName, histNum=5):
         place = placeList[index]
         if (activity != 'NONE') and (not place.startswith('#')):
             placeLabelMapper[place] = activity
-    print(placeLabelMapper)
+    #print(placeLabelMapper)
+
+    histTweetData = {}
+    for place in placeLabelMapper:
+        print(place)
+        count = 0
+        POShistFile = open('data/POShistCleanMax_50_0.5/' + place + '.pos', 'r')
+        idTagMapper = {}
+        for line in POShistFile:
+            data = json.loads(line.strip())
+            idTagMapper[int(data.keys()[0])] = data.values()[0]
+        POShistFile.close()
+        print(len(idTagMapper))
+        histFile = open('data/POIHistClean/' + place + '.json', 'r')
+        for line in histFile:
+            histData = json.loads(line.strip())
+            maxId = histData['max_id']
+            if len(histData['statuses']) > histNumMin:
+                histTemp = []
+                for i in range(min(histNumMax, len(histData['statuses'])-1)):
+                    tweet = histData['statuses'][i+1]
+                    if tweet['id'] in idTagMapper:
+                        if len(idTagMapper[tweet['id']]) > 2:
+                            contentList, posList = extractPOS(idTagMapper[int(tweet['id'])], breakEmoji=True)
+                            if len(contentList) > 3:
+                                dateTemp = tweet['created_at'].split()
+                                day = dayMapper[dateTemp[0]]
+                                hour = hourMapper(dateTemp[3].split(':')[0])
+                                histTemp.append({'id': tweet['id'], 'content': list2str(contentList), 'pos': list2str(posList), 'day': day, 'hour': hour, 'created_at': tweet['created_at']})
+                if len(histTemp) > 0:
+                    histTweetData[maxId] = histTemp
+                    count += 1
+        #print(count)
+        histFile.close()
+
+    outputFile = open('data/consolidateHistData_' + modelName + '_max.json', 'w')
+    for maxId, histTweets in histTweetData.items():
+        outputFile.write(json.dumps({maxId: histTweets})+'\n')
+    outputFile.close()
+    print(len(histTweetData))
+
+
+
+def processHist_places(modelName, histNum=5):
+    activityList = {}
+    activityListFile = open('lists/google_place_activity_' + modelName + '.list', 'r')
+    for index, line in enumerate(activityListFile):
+        activityList[index] = line.strip()
+    activityListFile.close()
+
+    placeList = {}
+    placeListFile = open('lists/google_place_long.category', 'r')
+    for index, line in enumerate(placeListFile):
+        placeList[index] = line.strip()
+    placeListFile.close()
+
+    placeLabelMapper = {}
+    for index in range(len(placeList)):
+        activity = activityList[index]
+        place = placeList[index]
+        if (activity != 'NONE') and (not place.startswith('#')):
+            placeLabelMapper[place] = activity
+    #print(placeLabelMapper)
 
     histTweetData = {}
     for place in placeLabelMapper:
@@ -223,6 +285,8 @@ def processHist(modelName, histNum=5):
                     elif len(idTagMapper[tweet['id']]) < 2:
                         suffHist = False
                         break
+                    elif tweet['place'] is None:
+                        break
                     else:
                         contentList, posList = extractPOS(idTagMapper[tweet['id']], breakEmoji=True)
                         if len(contentList) < 3:
@@ -231,17 +295,21 @@ def processHist(modelName, histNum=5):
                     dateTemp = histData['statuses'][i + 1]['created_at'].split()
                     day = dayMapper[dateTemp[0]]
                     hour = hourMapper(dateTemp[3].split(':')[0])
-                    histTemp.append({'id': tweet['id'], 'content': list2str(contentList), 'pos': list2str(posList), 'day': day, 'hour': hour})
-                if suffHist:
+                    histTemp.append({'id': tweet['id'], 'content': list2str(contentList), 'pos': list2str(posList), 'day': day, 'hour': hour, 'created_at': histData['statuses'][i + 1]['created_at'], 'place': tweet['place']})
+                if suffHist and len(histTemp) >= histNum:
                     histTweetData[maxId] = histTemp
+                elif len(histTweetData[maxId]) == 0:
+                    del histTweetData[maxId]
         histFile.close()
 
-    outputFile = open('newData/consolidateHistData_' + modelName + '.json', 'w')
+    outputFile = open('newData/consolidateHistDataPlaces_' + modelName + '.json', 'w')
     for maxId, histTweets in histTweetData.items():
         outputFile.write(json.dumps({maxId: histTweets})+'\n')
     outputFile.close()
     print(len(histTweetData))
 
+
 if __name__ == '__main__':
-    #processTweet('long1.5', hashtag=False, rules=True)
-    processHist('long1.5', histNum=5)
+    processHist('long1.5', histNumMax=50)
+    #processHist('long1.5', histNum=5)
+    #processTweet('long1.5')

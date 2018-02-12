@@ -19,7 +19,7 @@ for index, place in enumerate(placeList):
         statuses = data['statuses']
         outputStatuses = []
         for tweet in statuses:
-            if len(tweet['text']) > 1:
+            if len(tweet['text']) > 5:
                 if langid.classify(tweet['text'])[0] == 'en':
                     outputStatuses.append(tweet)
         output = {'max_id': max_id, 'user_id': user_id, 'statuses': outputStatuses}

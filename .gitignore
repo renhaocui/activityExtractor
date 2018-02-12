@@ -13,3 +13,7 @@ result/*
 *.pyc
 consolidated data/*
 newData/*
+samples/*
+samples_full/*
+samples_hist/*
+oldData/*
