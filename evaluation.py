@@ -13,9 +13,9 @@ class evalMetrics:
         self.sumConMatrix = numpy.zeros([labelNum, labelNum])
 
     def addEval(self, score, labels_test, predLabels):
-        precision = precision_score(labels_test, predLabels, average='macro')*100
-        recall = recall_score(labels_test, predLabels, average='macro')*100
-        f1 = f1_score(labels_test, predLabels, average='macro')*100
+        precision = precision_score(labels_test, predLabels, average='weighted')*100
+        recall = recall_score(labels_test, predLabels, average='weighted')*100
+        f1 = f1_score(labels_test, predLabels, average='weighted')*100
         conMatrix = confusion_matrix(labels_test, predLabels)
         self.sumConMatrix = numpy.add(self.sumConMatrix, conMatrix)
         self.score.append(score*100)

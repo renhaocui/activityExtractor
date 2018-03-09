@@ -1,5 +1,4 @@
-import json
-import re
+import json, re, sys, evaluation, pickle
 import numpy as np
 from keras.layers import Dense, LSTM, Input, concatenate
 from keras.layers.embeddings import Embedding
@@ -13,7 +12,6 @@ from sklearn.utils.class_weight import compute_sample_weight, compute_class_weig
 from utilities import word2vecReader
 from wordsegment import load, segment
 from utilities import tokenizer
-import sys, evaluation
 reload(sys)
 sys.setdefaultencoding('utf8')
 load()
@@ -24,7 +22,7 @@ posEmbLength = 25
 embeddingVectorLength = 200
 embeddingPOSVectorLength = 20
 charLengthLimit = 20
-batch_size = 100
+batch_size = 10
 
 dayMapper = {'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0}
 POSMapper = {'N': 'N', 'O': 'N', '^': 'N', 'S': 'N', 'Z': 'N', 'L': 'N', 'M': 'N',
@@ -76,37 +74,7 @@ def removeLinks(input):
     return input
 
 
-def extractPOS(inputList, mode='all', breakEmoji=True):
-    posOutput = ''
-    contentOutput = ''
-    for item in inputList:
-        if breakEmoji:
-            emojis1 = re.findall(r'\\u....', item[0].encode('unicode-escape'))
-            emojis2 = re.findall(r'\\U........', item[0].encode('unicode-escape'))
-            emojis = emojis1 + emojis2
-            if len(emojis) > 0:
-                for emoji in emojis:
-                    contentOutput += emoji + ' '
-                    posOutput += 'E' + ' '
-            else:
-                contentOutput += item[0] + ' '
-                if mode == 'all':
-                    posOutput += item[1] + ' '
-                else:
-                    posOutput += POSMapper[item[1]] + ' '
-        else:
-            contentOutput += item[0] + ' '
-            if mode == 'all':
-                posOutput += item[1] + ' '
-            else:
-                posOutput += POSMapper[item[1]] + ' '
-        if len(contentOutput.split(' ')) != len(posOutput.split(' ')):
-            print('error')
-            print(contentOutput)
-    return contentOutput.lower().strip().encode('utf-8'), posOutput.strip().encode('utf-8')
-
-
-def loadHistData(modelName, char, embedding, histNum=5, pos=False):
+def loadHistData(modelName, char, embedding, histNum=5, pos=False, saveModel=False, resultName=''):
     print('Loading...')
     histData = {}
     histFile = open('data/consolidateHistData_' + modelName + '.json', 'r')
@@ -169,6 +137,10 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
     tweetSequences = tk.texts_to_sequences(contents)
     tweetVector = sequence.pad_sequences(tweetSequences, maxlen=tweetLength, truncating='post', padding='post')
 
+    if saveModel:
+        with open(resultName+'_tweet.tk', 'wb') as handle:
+            pickle.dump(tk, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     histTweetVectors = []
     for i in range(histNum):
         histSequence = tk.texts_to_sequences(histContents[i])
@@ -215,6 +187,10 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
         posSequences = tkPOS.texts_to_sequences(poss)
         posVector = sequence.pad_sequences(posSequences, maxlen=tweetLength, truncating='post', padding='post')
 
+        if saveModel:
+            with open(resultName + '_pos.tk', 'wb') as handle:
+                pickle.dump(tkPOS, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         histPOSVectors = []
         for i in range(histNum):
             histPOSSequences = tkPOS.texts_to_sequences(histPOSLists[i])
@@ -225,6 +201,7 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
 
 
 def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
+    resultName = 'result/C-Hist-Context-T-LSTM_' + modelName + '_' + balancedWeight
     ids, labels, places, contents, dayVector, hourVector, tweetVector, histTweetVectors, histDayVector, histHourVector, embMatrix, word_index = loadHistData(modelName, char, embedding, histNum=histNum, pos=False)
 
     labelNum = len(np.unique(labels))
@@ -233,7 +210,7 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
     encoder.fit(labels)
     labelList = encoder.classes_.tolist()
     print('Labels: ' + str(labelList))
-    labelFile = open('result/C-Hist-Context-T-LSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
+    labelFile = open(resultName + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
 
@@ -355,7 +332,7 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
         accuracyHist = trainHistory.history['val_acc']
         lossHist = trainHistory.history['val_loss']
 
-        tuneFile = open('result/C-Hist-Context-T-LSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        tuneFile = open(resultName + '.tune', 'a')
         tuneFile.write('Hist Num: ' + str(histNum) + '\n')
         for index, loss in enumerate(lossHist):
             tuneFile.write(str(index + 1) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
@@ -366,7 +343,7 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
         predictions = model.predict(testList, batch_size=batch_size)
-        sampleFile = open('result/C-Hist-Context-T-LSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
+        sampleFile = open(resultName + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
@@ -382,8 +359,8 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
     recall, recSTD = eval.getRecall()
     f1, f1STD = eval.getF1()
     conMatrix = eval.getConMatrix()
-    resultFile = open('result/C-Hist-Context-T-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
-    confusionFile = open('result/C-Hist-Context-T-LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
+    resultFile = open(resultName + '.result', 'a')
+    confusionFile = open(resultName + '.confMatrix', 'a')
     for row in conMatrix:
         lineOut = ''
         for line in row:
@@ -405,14 +382,14 @@ def processHistLSTM_contextT(modelName, balancedWeight='None', embedding='None',
 def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
     ids, labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(modelName, char, embedding,
                                                                                                                                                         histNum=histNum, pos=True)
-
+    resultName = 'result/C-Hist-Context-POS-LSTM_' + modelName + '_' + balancedWeight
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
     encoder = LabelEncoder()
     encoder.fit(labels)
     labelList = encoder.classes_.tolist()
     print('Labels: ' + str(labelList))
-    labelFile = open('result/C-Hist-Context-POS-LSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
+    labelFile = open(resultName + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
 
@@ -519,7 +496,7 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
         accuracyHist = trainHistory.history['val_acc']
         lossHist = trainHistory.history['val_loss']
 
-        tuneFile = open('result/C-Hist-Context-POS-LSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        tuneFile = open(resultName + '.tune', 'a')
         tuneFile.write('Hist Num: ' + str(histNum) + '\n')
         for index, loss in enumerate(lossHist):
             tuneFile.write(str(index + 1) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
@@ -530,7 +507,7 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
         predictions = model.predict(testList, batch_size=batch_size)
-        sampleFile = open('result/C-Hist-Context-POS-LSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
+        sampleFile = open(resultName + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
@@ -546,8 +523,8 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
     recall, recSTD = eval.getRecall()
     f1, f1STD = eval.getF1()
     conMatrix = eval.getConMatrix()
-    resultFile = open('result/C-Hist-Context-POS-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
-    confusionFile = open('result/C-Hist-Context-POS-LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
+    resultFile = open(resultName + '.result', 'a')
+    confusionFile = open(resultName + '.confMatrix', 'a')
     for row in conMatrix:
         lineOut = ''
         for line in row:
@@ -566,18 +543,18 @@ def processHistLSTM_contextPOS(modelName, balancedWeight='None', embedding='None
     print(f1 + ' ' + f1STD)
 
 
-def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
+def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False, saveModel=False):
+    resultName = 'result/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight
     ids, labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(
         modelName, char, embedding,
-        histNum=histNum, pos=True)
-
+        histNum=histNum, pos=True, saveModel=saveModel, resultName=resultName)
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
     encoder = LabelEncoder()
     encoder.fit(labels)
     labelList = encoder.classes_.tolist()
     print('Labels: ' + str(labelList))
-    labelFile = open('result/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
+    labelFile = open(resultName + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
 
@@ -715,18 +692,24 @@ def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='Non
         accuracyHist = trainHistory.history['val_acc']
         lossHist = trainHistory.history['val_loss']
 
-        tuneFile = open('result/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        tuneFile = open(resultName + '.tune', 'a')
         tuneFile.write('Hist Num: ' + str(histNum) + '\n')
         for index, loss in enumerate(lossHist):
             tuneFile.write(str(index + 1) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
         tuneFile.write('\n')
         tuneFile.close()
 
+        if saveModel:
+            model_json = model.to_json()
+            with open(resultName+'_model.json', 'w') as json_file:
+                json_file.write(model_json)
+            model.save_weights(resultName+'_model.h5')
+
         scores = model.evaluate(testList, labelVector_test, batch_size=batch_size, verbose=0)
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
         predictions = model.predict(testList, batch_size=batch_size)
-        sampleFile = open('result/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
+        sampleFile = open(resultName + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
@@ -742,8 +725,8 @@ def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='Non
     recall, recSTD = eval.getRecall()
     f1, f1STD = eval.getF1()
     conMatrix = eval.getConMatrix()
-    resultFile = open('result/C-Hist-Context-POST-LSTM_.' + modelName + '_' + balancedWeight + '.result', 'a')
-    confusionFile = open('result/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
+    resultFile = open(resultName + '.result', 'a')
+    confusionFile = open(resultName + '.confMatrix', 'a')
     for row in conMatrix:
         lineOut = ''
         for line in row:
@@ -763,12 +746,12 @@ def processHistLSTM_contextPOST(modelName, balancedWeight='None', embedding='Non
 
 
 if __name__ == "__main__":
-    processHistLSTM_contextT('long1.5', 'none', 'glove', char=False, histNum=5, epochs=10, tune=False)
-    processHistLSTM_contextT('long1.5', 'class', 'glove', char=False, histNum=5, epochs=27, tune=False)
+    #processHistLSTM_contextT('long1.5', 'none', 'glove', char=False, histNum=5, epochs=4, tune=False)
+    #processHistLSTM_contextT('long1.5', 'class', 'glove', char=False, histNum=5, epochs=27, tune=False)
 
-    #processHistLSTM_contextPOS('long1.5', 'none', 'glove', char=False, histNum=5, epochs=25, tune=False)
+    #processHistLSTM_contextPOS('long1.5', 'none', 'glove', char=False, histNum=5, epochs=4, tune=False)
     #processHistLSTM_contextPOS('long1.5', 'class', 'glove', char=False, histNum=3, epochs=6, tune=False)
 
-    #processHistLSTM_contextPOST('long1.5', 'none', 'glove', char=False, histNum=3, epochs=6, tune=False)
-    #processHistLSTM_contextPOST('long1.5', 'class', 'glove', char=False, histNum=5, epochs=10, tune=False)
+    processHistLSTM_contextPOST('long1.5', 'none', 'glove', char=False, histNum=5, epochs=4, tune=False, saveModel=False)
+    #processHistLSTM_contextPOST('long1.5', 'class', 'glove', char=False, histNum=5, epochs=10, tune=False, saveModel=True)
 

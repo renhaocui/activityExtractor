@@ -915,6 +915,7 @@ def processHistLSTM_time(modelName, balancedWeight='None', embedding='None', cha
 
 def processHistLSTM(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=4, tune=False):
     print('Loading...')
+    resultName = 'result/H-HistLSTM_' + modelName + '_' + balancedWeight
     histData = {}
     histFile = open('data/consolidateHistData_' + modelName + '.json', 'r')
     for line in histFile:
@@ -949,7 +950,7 @@ def processHistLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
     encoder.fit(labels)
     labelList = encoder.classes_.tolist()
     print('Labels: ' + str(labelList))
-    labelFile = open('result/H-HistLSTM_' + modelName + '_' + balancedWeight + '.label', 'a')
+    labelFile = open(resultName + '.label', 'a')
     labelFile.write(str(labelList) + '\n')
     labelFile.close()
 
@@ -1065,7 +1066,7 @@ def processHistLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
         accuracyHist = trainHistory.history['val_acc']
         lossHist = trainHistory.history['val_loss']
 
-        tuneFile = open('result/H-HistLSTM_' + modelName + '_' + balancedWeight + '.tune', 'a')
+        tuneFile = open(resultName + '.tune', 'a')
         tuneFile.write('Hist Num: ' + str(histNum) + '\n')
         for index, loss in enumerate(lossHist):
             tuneFile.write(str(index + 1) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
@@ -1076,7 +1077,7 @@ def processHistLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
         print("Accuracy: %.2f%%" % (scores[1] * 100))
 
         predictions = model.predict(data_test, batch_size=batch_size)
-        sampleFile = open('result/H-HistLSTM_' + modelName + '_' + balancedWeight + '.sample', 'a')
+        sampleFile = open(resultName + '.sample', 'a')
         predLabels = []
         for index, pred in enumerate(predictions):
             predLabel = labelList[pred.tolist().index(max(pred))]
@@ -1093,8 +1094,8 @@ def processHistLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
     recall, recSTD = eval.getRecall()
     f1, f1STD = eval.getF1()
     conMatrix = eval.getConMatrix()
-    confusionFile = open('result/H-HistLSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    resultFile = open('result/H-HistLSTM.' + modelName + '_' + balancedWeight + '.result', 'a')
+    confusionFile = open(resultName + '.confMatrix', 'a')
+    resultFile = open(resultName + '.result', 'a')
     for row in conMatrix:
         lineOut = ''
         for line in row:
@@ -1654,7 +1655,7 @@ if __name__ == '__main__':
     #processTLSTM('long1.5', 'none', 'glove', char=False, hashtag=False, epochs=6)
 
     #processHistLSTM_time('long1.5', 'none', 'glove', char=False, posMode='all', hashtag=False, epochs=16)
-    #processHistLSTM('long1.5', 'none', 'glove', char=False, histNum=5, epochs=6, tune=False)
+    processHistLSTM('long1.5', 'none', 'glove', char=False, histNum=5, epochs=20, tune=True)
     #processHistLSTM('long1.5', 'class', 'glove', char=False, histNum=5, epochs=6, tune=False)
 
     #processMIXLSTM('long1.5', 'none', 'glove', char=False, posMode='all', epochs=7)
@@ -1666,6 +1667,6 @@ if __name__ == '__main__':
     #processCHLTM('long1.5', 'none', epochs=200)
 
 
-    for num in [9]:
-        processHistLSTM_period('long1.5', 'none', 'glove', periodNum=num, epochs=30, tune=True)
+    #for num in [9]:
+    #    processHistLSTM_period('long1.5', 'none', 'glove', periodNum=num, epochs=30, tune=True)
     #    processHistLSTM_period('long1.5', 'class', 'glove', periodNum=num, epochs=30, tune=True)

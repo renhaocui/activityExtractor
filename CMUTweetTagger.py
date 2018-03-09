@@ -214,14 +214,14 @@ def processUserTweetTag(fileName, hashtag=True):
         userIDList = []
         tweetIDList = []
         contents = []
-        inputFile = open('data/userTweets2/clean/' + brand + '.json', 'r')
-        outFile = open('data/userTweets2/clean/' + brand + '.pos', 'w')
+        inputFile = open('data/userTweets2/clean2/' + brand + '.json', 'r')
+        outFile = open('data/userTweets2/clean2/' + brand + '.pos', 'w')
         for line in inputFile:
             userData = json.loads(line.strip())
-            if len(userData['statuses']) > 5:
+            if len(userData['statuses']) > 19:
                 user_id = userData['user_id']
-                tweets = sortTweetbyID(userData['statuses'], num=6)
-                for tweet in tweets:
+                #tweets = sortTweetbyID(userData['statuses'], num=6)
+                for tweet in userData['statuses']:
                     content = removeLinks(tweet['text']).replace('\n', ' ').replace('\r', ' ').replace('#', ' #')
                     tweetID = tweet['id']
                     tweetIDList.append(tweetID)
@@ -254,10 +254,7 @@ def processUserTweetTag(fileName, hashtag=True):
                 predTemp = predictions[predIndex].encode('unicode-escape')
                 score = SequenceMatcher(None, contentTemp, predTemp).ratio()
                 if score > 0.7:
-                    if userIDList[idIndex] not in outputDict:
-                        outputDict[userIDList[idIndex]] = [{'id': tweetIDList[idIndex], 'tag': outputs[predIndex]}]
-                    else:
-                        outputDict[userIDList[idIndex]].append({'id': tweetIDList[idIndex], 'tag': outputs[predIndex]})
+                    outputDict[tweetIDList[idIndex]] = outputs[predIndex]
                     count += 1
                     predIndex += 1
                     idIndex += 1
@@ -268,23 +265,17 @@ def processUserTweetTag(fileName, hashtag=True):
             if count != len(outputs):
                 print('ERROR')
             else:
-                for userID, value in outputDict.items():
-                    outFile.write(json.dumps({userID: value})+'\n')
+                for key, value in outputDict.items():
+                    outFile.write(json.dumps({int(key): value})+'\n')
+
         else:
-            outDict = {}
             for index, out in enumerate(outputs):
-                userID = userIDList[index]
-                if userID not in outDict:
-                    outDict[userID] = [{'id': tweetIDList[index], 'tag': out}]
-                else:
-                    outDict[userID].append({'id': tweetIDList[index], 'tag': out})
-            for userID, value in outDict:
-                outFile.write(json.dumps({userID: value})+'\n')
+                outFile.write(json.dumps({int(tweetIDList[index]): out})+'\n')
         outFile.close()
 
 
 
 if __name__ == "__main__":
     #processTweetTag(hashtag=False)
-    processHistTag(hashtag=False, maxHistNum=100)
-    #processUserTweetTag('lists/popularAccount2.list', hashtag=False)
+    #processHistTag(hashtag=False, maxHistNum=50)
+    processUserTweetTag('lists/popularAccount4.list', hashtag=False)

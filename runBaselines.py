@@ -95,13 +95,18 @@ def loadData(modelName, char, embedding):
     places = []
     ids = []
     dataFile = open('data/consolidateData_'+modelName+'.json', 'r')
+    labelCount = {}
     for line in dataFile:
         data = json.loads(line.strip())
         contents.append(data['content'].encode('utf-8'))
         labels.append(data['label'])
+        if data['label'] not in labelCount:
+            labelCount[data['label']] = 1
+        else:
+            labelCount[data['label']] += 1
         places.append(data['place'])
         ids.append(str(data['id']))
-
+    print(labelCount)
     if char:
         tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
     else:
@@ -519,7 +524,8 @@ def processCNNLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
         else:
             embedding_tweet = Embedding(vocabSize, embeddingVectorLength)(input)
         tweet_cnn = Conv1D(filters=64, kernel_size=3, padding='same', activation='relu')(embedding_tweet)
-        tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, name='LSTM')(tweet_cnn)
+        tweet_pool = MaxPooling1D(pool_size=2)(tweet_cnn)
+        tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, name='LSTM')(tweet_pool)
         output = Dense(labelNum, activation='softmax')(tweet_lstm)
         model = Model(inputs=input, outputs=output)
         model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -805,8 +811,8 @@ def processLSTMCNN(modelName, balancedWeight='None', embedding='None', char=Fals
 '''
 
 if __name__ == "__main__":
-    processLSTM('long1.5', 'none', 'glove', char=False, epochs=8, tune=False)
-    processLSTM('long1.5', 'class', 'glove', char=False, epochs=8, tune=False)
+    processLSTM('long1.5', 'none', 'glove', char=False, epochs=6, tune=False)
+    #processLSTM('long1.5', 'class', 'glove', char=False, epochs=8, tune=False)
 
     #processBiLSTM('long1.5', 'none', 'glove', char=False, epochs=4, tune=False)
     #processBiLSTM('long1.5', 'class', 'glove', char=False, epochs=5, tune=False)
@@ -814,5 +820,5 @@ if __name__ == "__main__":
     #processAttLSTM('long1.5', 'none', 'glove', char=False, epochs=5, tune=False)
     #processAttLSTM('long1.5', 'class', 'glove', char=False, epochs=5, tune=False)
 
-    #processCNNLSTM('long1.5', 'none', 'glove', char=False, epochs=6, tune=False)
+    #processCNNLSTM('long1.5', 'none', 'glove', char=False, epochs=5, tune=False)
     #processCNNLSTM('long1.5', 'class', 'glove', char=False, epochs=5, tune=False)

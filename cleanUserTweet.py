@@ -14,7 +14,6 @@ def clean(fileName):
 
     for brand in brandList:
         print(brand)
-        userTweetID = {}
         userTweets = {}
         tweetFile = open('data/userTweets2/'+brand+'.json', 'r')
         for line in tweetFile:
@@ -23,27 +22,24 @@ def clean(fileName):
             except:
                 continue
             userID = data['user']
-            if userID not in userTweetID:
-                userTweetID[userID] = set()
             if userID not in userTweets:
                 userTweets[userID] = []
             tweets = data['statuses']
             for tweet in tweets:
-                tweetID = tweet['id']
-                if tweetID not in userTweetID[userID]:
-                    if len(tweet['text']) > 5:
-                        if langid.classify(tweet['text'])[0] == 'en':
-                            userTweetID[userID].add(tweetID)
-                            userTweets[userID].append(tweet)
+                if len(tweet['text']) > 5:
+                    if langid.classify(tweet['text'])[0] == 'en':
+                        userTweets[userID].append(tweet)
+                if len(userTweets[userID]) > 20:
+                    break
         tweetFile.close()
 
-        outputFile = open('data/userTweets2/clean/' + brand + '.json', 'w')
+        outputFile = open('data/userTweets2/clean2/' + brand + '.json', 'w')
         for userID, tweets in userTweets.items():
-            if len(tweets) > 5:
+            if len(tweets) > 19:
                 output = {'user_id': userID, 'statuses': tweets}
                 outputFile.write(json.dumps(output)+'\n')
         outputFile.close()
 
 
 if __name__ == '__main__':
-    clean('lists/popularAccount2.list')
+    clean('lists/popularAccount4.list')

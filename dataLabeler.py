@@ -63,13 +63,6 @@ def extractPOS(inputList, breakEmoji=True, removeAllMentions=True):
     else:
         return contentOutput, posOutput
 
-def removeLinks(input):
-    urls = re.findall("(?P<url>https?://[^\s]+)", input)
-    if len(urls) != 0:
-        for url in urls:
-            input = input.replace(url, '')
-    return input
-
 
 def processTweet(modelName, hashtag=False, rules=True):
     activityList = {}

@@ -295,77 +295,77 @@ def loadHistData(modelName, char, embedding, histNum=5, pos=False):
 
         return ids, labels, places, contents, days, hours, poss, tweetVector, posVector, histTweetVectors, histPOSVectors, posVocabSize, embMatrix, word_index
 
-'''
-def loadData(modelName, char, embedding, hashtag, posMode='all'):
-    activityList = []
-    activityListFile = open('lists/google_place_activity_' + modelName + '.list', 'r')
-    for line in activityListFile:
-        if not line.startswith('NONE'):
-            activityList.append(line.strip())
-    activityListFile.close()
-    placeList = []
-    placeListFile = open('lists/google_place_long.category', 'r')
-    for line in placeListFile:
-        if not line.startswith('#'):
-            placeList.append(line.strip())
-    placeListFile.close()
+
+def loadHistData2(modelName, char, embedding, histNum=5, pos=False):
+    print('Loading...')
+    histData = {}
+    histFile = open('data/consolidateHistData_' + modelName + '.json', 'r')
+    for line in histFile:
+        data = json.loads(line.strip())
+        histData[int(data.keys()[0])] = data.values()[0]
 
     contents = []
     labels = []
-    posList = []
-    dayList = []
-    hourList = []
     places = []
-    idTagMapper = {}
-    for index, place in enumerate(placeList):
-        activity = activityList[index]
-        if hashtag:
-            POSFile = open('data/POS/' + place + '.pos', 'r')
-        else:
-            POSFile = open('data/POSnew/' + place + '.pos', 'r')
-        for line in POSFile:
-            data = json.loads(line.strip())
-            idTagMapper[data['id']] = data['tag']
-        POSFile.close()
+    days = []
+    hours = []
+    poss = []
+    ids = []
+    histContents = {}
+    histDayVectors = {}
+    histHourVectors = {}
+    histPOSLists = {}
+    for i in range(histNum):
+        histContents[i] = []
+        histDayVectors[i] = []
+        histHourVectors[i] = []
+        histPOSLists[i] = []
+    dataFile = open('data/consolidateData_'+modelName+'.json', 'r')
+    for line in dataFile:
+        data = json.loads(line.strip())
+        if data['id'] in histData:
+            histTweets = histData[data['id']]
+            if len(histTweets) >= histNum:
+                contents.append(data['content'].encode('utf-8'))
+                labels.append(data['label'])
+                places.append(data['place'])
+                ids.append(str(data['id']))
+                days.append(np.full((tweetLength), data['day'], dtype='int'))
+                hours.append(np.full((tweetLength), data['hour'], dtype='int'))
+                poss.append(data['pos'].encode('utf-8'))
+                for i in range(histNum):
+                    histContents[i].append(histTweets[i]['content'].encode('utf-8'))
+                    histPOSLists[i].append(histTweets[i]['pos'].encode('utf-8'))
+                    histDayVectors[i].append(np.full((tweetLength), histTweets[i]['day'], dtype='int'))
+                    histHourVectors[i].append(np.full((tweetLength), histTweets[i]['hour'], dtype='int'))
 
-        tweetFile = open('data/POIplace/' + place + '.json', 'r')
-        for line in tweetFile:
-            data = json.loads(line.strip())
-            if len(data['text']) > charLengthLimit:
-                id = data['id']
-                # content = data['text'].replace('\n', ' ').replace('\r', ' ').encode('utf-8').lower()
-                content, pos = extractPOS(idTagMapper[id])
-                contents.append(content)
-                posList.append(pos)
-                dateTemp = data['created_at'].split()
-                day = dayMapper[dateTemp[0]]
-                hour = hourMapper(dateTemp[3].split(':')[0])
-                dayList.append(day)
-                hourList.append(hour)
-                labels.append(activity)
-                places.append(place)
-        tweetFile.close()
+    for i in range(histNum):
+        histDayVectors[i] = np.array(histDayVectors[i])
+        histHourVectors[i] = np.array(histHourVectors[i])
+    days = np.array(days)
+    hours = np.array(hours)
+    places = np.array(places)
+    ids = np.array(ids)
 
     if char:
         tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
     else:
         tk = Tokenizer(num_words=vocabSize, char_level=char)
-    tk.fit_on_texts(contents)
+
+    totalList = contents[:]
+    for i in range(histNum):
+        totalList += histContents[i]
+    tk.fit_on_texts(totalList)
     tweetSequences = tk.texts_to_sequences(contents)
     tweetVector = sequence.pad_sequences(tweetSequences, maxlen=tweetLength, truncating='post', padding='post')
 
-    if posMode == 'all':
-        posVocabSize = 25
-    else:
-        posVocabSize = 11
-
-    tkPOS = Tokenizer(num_words=posVocabSize, filters='', lower=False)
-    tkPOS.fit_on_texts(posList)
-    posSequences = tkPOS.texts_to_sequences(posList)
-    posVector = sequence.pad_sequences(posSequences, maxlen=tweetLength, truncating='post', padding='post')
+    histTweetVectors = []
+    for i in range(histNum):
+        histSequence = tk.texts_to_sequences(histContents[i])
+        tempVector = sequence.pad_sequences(histSequence, maxlen=tweetLength, truncating='post', padding='post')
+        histTweetVectors.append(tempVector)
 
     if embedding == 'glove':
-        print ('Loading glove embeddings...')
         embeddings_index = {}
         embFile = open('../tweetEmbeddingData/glove.twitter.27B.200d.txt', 'r')
         for line in embFile:
@@ -393,8 +393,26 @@ def loadData(modelName, char, embedding, hashtag, posMode='all'):
         embMatrix = None
         word_index = None
 
-    return placeList, activityList, posList, dayList, hourList, labels, places, contents, idTagMapper, tweetVector, posVector, posVocabSize, embMatrix, word_index
-'''
+    if not pos:
+        return ids, labels, places, contents, days, hours, tweetVector, histTweetVectors, histDayVectors, histHourVectors, embMatrix, word_index
+    else:
+        posVocabSize = 25
+        tkPOS = Tokenizer(num_words=posVocabSize, filters='', lower=False)
+        totalPOSList = poss[:]
+        for i in range(histNum):
+            totalPOSList += histPOSLists[i]
+        tkPOS.fit_on_texts(totalPOSList)
+        posSequences = tkPOS.texts_to_sequences(poss)
+        posVector = sequence.pad_sequences(posSequences, maxlen=tweetLength, truncating='post', padding='post')
+
+        histPOSVectors = []
+        for i in range(histNum):
+            histPOSSequences = tkPOS.texts_to_sequences(histPOSLists[i])
+            histPOSVector = sequence.pad_sequences(histPOSSequences, maxlen=tweetLength, truncating='post', padding='post')
+            histPOSVectors.append(histPOSVector)
+
+        return ids, labels, places, contents, days, hours, poss, tweetVector, posVector, histTweetVectors, histDayVectors, histHourVectors, histPOSVectors, posVocabSize, embMatrix, word_index
+
 
 def processContextPOSLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=7, tune=False):
     ids, labels, places, contents, dayList, hourList, posList, tweetVector, posVector, posVocabSize, embMatrix, word_index = loadData(modelName, char, embedding, pos=True)
@@ -1148,10 +1166,9 @@ def processHistLSTM_period(modelName, balancedWeight='None', embedding='None', p
 
 
 def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, tune=False):
-    ids, labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histVectors, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(
+    ids, labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData2(
         modelName, char, embedding,
         histNum=histNum, pos=True)
-
     labelNum = len(np.unique(labels))
     labels = np.array(labels)
     encoder = LabelEncoder()
@@ -1180,12 +1197,15 @@ def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None
             embedding_tweet = shared_embedding(input_tweet)
 
         input_pos = Input(batch_shape=(batch_size, posEmbLength,))
-        embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)(input_pos)
+        shared_embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)
+        embedding_pos = shared_embedding_pos(input_pos)
 
         input_day = Input(batch_shape=(batch_size, tweetLength,))
         input_hour = Input(batch_shape=(batch_size, tweetLength,))
-        embedding_day = Embedding(20, embeddingPOSVectorLength)(input_day)
-        embedding_hour = Embedding(20, embeddingPOSVectorLength)(input_hour)
+        shared_embedding_day = Embedding(20, embeddingPOSVectorLength)
+        embedding_day = shared_embedding_day(input_day)
+        shared_embedding_hour = Embedding(20, embeddingPOSVectorLength)
+        embedding_hour = shared_embedding_hour(input_hour)
 
         conList = [embedding_tweet, embedding_pos, embedding_day, embedding_hour]
         inputList = [input_tweet, input_pos, input_day, input_hour]
@@ -1194,6 +1214,20 @@ def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None
             embedding_hist = shared_embedding(input_hist)
             conList.append(embedding_hist)
             inputList.append(input_hist)
+
+            input_pos = Input(batch_shape=(batch_size, posEmbLength,))
+            embedding_pos = shared_embedding_pos(input_pos)
+            conList.append(embedding_pos)
+            inputList.append(input_pos)
+
+            input_day = Input(batch_shape=(batch_size, tweetLength,))
+            input_hour = Input(batch_shape=(batch_size, tweetLength,))
+            embedding_day = shared_embedding_day(input_day)
+            embedding_hour = shared_embedding_hour(input_hour)
+            conList.append(embedding_day)
+            conList.append(embedding_hour)
+            inputList.append(input_day)
+            inputList.append(input_hour)
 
         embedding_comb = concatenate(conList)
         lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_comb)
@@ -1218,9 +1252,21 @@ def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None
         posVector_test = posVector[test_index]
         histVector_train = []
         histVector_test = []
+        histPOSVector_train = []
+        histPOSVector_test = []
+        histDayVector_train=[]
+        histDayVector_test=[]
+        histHourVector_train = []
+        histHourVector_test = []
         for i in range(histNum):
-            histVector_train.append(histVectors[i][train_index])
-            histVector_test.append(histVectors[i][test_index])
+            histVector_train.append(histTweetVectors[i][train_index])
+            histVector_test.append(histTweetVectors[i][test_index])
+            histPOSVector_train.append(histPOSVectors[i][train_index])
+            histPOSVector_test.append(histPOSVectors[i][test_index])
+            histDayVector_train.append(histDayVector[i][train_index])
+            histDayVector_test.append(histDayVector[i][test_index])
+            histHourVector_train.append(histHourVector[i][train_index])
+            histHourVector_test.append(histHourVector[i][test_index])
 
         if len(labels_train) % batch_size != 0:
             tweet_train = tweet_train[:-(len(tweet_train) % batch_size)]
@@ -1230,6 +1276,9 @@ def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None
             posVector_train = posVector_train[:-(len(posVector_train) % batch_size)]
             for i in range(histNum):
                 histVector_train[i] = histVector_train[i][:-(len(histVector_train[i]) % batch_size)]
+                histDayVector_train[i] = histDayVector_train[i][:-(len(histDayVector_train[i]) % batch_size)]
+                histHourVector_train[i] = histHourVector_train[i][:-(len(histHourVector_train[i]) % batch_size)]
+                histPOSVector_train[i] = histPOSVector_train[i][:-(len(histPOSVector_train[i]) % batch_size)]
         if len(labels_test) % batch_size != 0:
             tweet_test = tweet_test[:-(len(tweet_test) % batch_size)]
             labels_test = labels_test[:-(len(labels_test) % batch_size)]
@@ -1240,6 +1289,9 @@ def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None
             posVector_test = posVector_test[:-(len(posVector_test) % batch_size)]
             for i in range(histNum):
                 histVector_test[i] = histVector_test[i][:-(len(histVector_test[i]) % batch_size)]
+                histDayVector_test[i] = histDayVector_test[i][:-(len(histDayVector_test[i]) % batch_size)]
+                histHourVector_test[i] = histHourVector_test[i][:-(len(histHourVector_test[i]) % batch_size)]
+                histPOSVector_test[i] = histPOSVector_test[i][:-(len(histPOSVector_test[i]) % batch_size)]
 
         labelVector_train = np_utils.to_categorical(encoder.transform(labels_train))
         labelVector_test = np_utils.to_categorical(encoder.transform(labels_test))
@@ -1247,8 +1299,8 @@ def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None
         trainList = [tweet_train, posVector_train, day_train, hour_train]
         testList = [tweet_test, posVector_test, day_test, hour_test]
         for i in range(histNum):
-            trainList.append(histVector_train[i])
-            testList.append(histVector_test[i])
+            trainList += [histVector_train[i], histPOSVector_train[i], histDayVector_train[i], histHourVector_train[i]]
+            testList += [histVector_test[i], histPOSVector_test[i], histDayVector_test[i], histHourVector_test[i]]
 
         if balancedWeight == 'sample':
             sampleWeight = compute_sample_weight('balanced', labels_train)
@@ -1284,29 +1336,30 @@ def processContextHistPOSTLSTM(modelName, balancedWeight='None', embedding='None
         if tune:
             break
 
-    score, scoreSTD = eval.getScore()
-    precision, preSTD = eval.getPrecision()
-    recall, recSTD = eval.getRecall()
-    f1, f1STD = eval.getF1()
-    conMatrix = eval.getConMatrix()
-    resultFile = open('result/Context-HistPOSTLSTM_' + modelName + '_' + balancedWeight + '.result', 'a')
-    confusionFile = open('result/Context-HistPOSTLSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
-    for row in conMatrix:
-        lineOut = ''
-        for line in row:
-            lineOut += str(line) + '\t'
-        confusionFile.write(lineOut.strip() + '\n')
-    confusionFile.write('\n')
-    resultFile.write(score + '\t' + scoreSTD + '\n')
-    resultFile.write(recall + '\t' + recSTD + '\n')
-    resultFile.write(precision + '\t' + preSTD + '\n')
-    resultFile.write(f1 + '\t' + f1STD + '\n\n')
-    confusionFile.close()
-    resultFile.close()
-    print(score + ' ' + scoreSTD)
-    print(recall + ' ' + recSTD)
-    print(precision + ' ' + preSTD)
-    print(f1 + ' ' + f1STD)
+    if not tune:
+        score, scoreSTD = eval.getScore()
+        precision, preSTD = eval.getPrecision()
+        recall, recSTD = eval.getRecall()
+        f1, f1STD = eval.getF1()
+        conMatrix = eval.getConMatrix()
+        resultFile = open('result/Context-HistPOSTLSTM_' + modelName + '_' + balancedWeight + '.result', 'a')
+        confusionFile = open('result/Context-HistPOSTLSTM_' + modelName + '_' + balancedWeight + '.confMatrix', 'a')
+        for row in conMatrix:
+            lineOut = ''
+            for line in row:
+                lineOut += str(line) + '\t'
+            confusionFile.write(lineOut.strip() + '\n')
+        confusionFile.write('\n')
+        resultFile.write(score + '\t' + scoreSTD + '\n')
+        resultFile.write(recall + '\t' + recSTD + '\n')
+        resultFile.write(precision + '\t' + preSTD + '\n')
+        resultFile.write(f1 + '\t' + f1STD + '\n\n')
+        confusionFile.close()
+        resultFile.close()
+        print(score + ' ' + scoreSTD)
+        print(recall + ' ' + recSTD)
+        print(precision + ' ' + preSTD)
+        print(f1 + ' ' + f1STD)
 
 
 if __name__ == "__main__":
@@ -1319,10 +1372,11 @@ if __name__ == "__main__":
     #processContextPOSTLSTM('long1.5', 'none', 'glove', char=False, epochs=8, tune=False)
     #processContextPOSTLSTM('long1.5', 'class', 'glove', char=False, epochs=9, tune=False)
 
-    #processContextHistLSTM('long1.5', 'none', 'glove', char=False, histNum=2, epochs=8, tune=False)
+    #processContextHistLSTM('long1.5', 'none', 'glove', char=False, histNum=5, epochs=6, tune=False)
     #processContextHistLSTM('long1.5', 'class', 'glove', char=False, histNum=3, epochs=19, tune=False)
 
-    #processContextHistPOSTLSTM('long1.5', 'none', 'glove', char=False, histNum=3, epochs=11, tune=False)
+    processContextHistPOSTLSTM('long1.5', 'none', 'glove', char=False, histNum=5, epochs=4, tune=False)
     #processContextHistPOSTLSTM('long1.5', 'class', 'glove', char=False, histNum=3, epochs=6, tune=False)
-    for num in [3, 6, 9]:
-        processHistLSTM_period('long1.5', 'class', 'glove', periodNum=num, epochs=20, tune=True)
+
+    #for num in [3]:
+    #    processHistLSTM_period('long1.5', 'class', 'glove', periodNum=num, epochs=6, tune=False)
