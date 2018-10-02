@@ -40,7 +40,7 @@ def collector():
     for index, place in enumerate(placeList):
         print(place)
         tweetFile = open('data/POIplace/' + place + '.json', 'r')
-        outputFile = open('data/POIHist/' + place + '.json', 'w')
+        outputFile = open('data/POIhist/' + place + '.json', 'w')
         for line in tweetFile:
             data = json.loads(line.strip())
             id = data['id']

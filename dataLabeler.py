@@ -113,7 +113,7 @@ def processTweet(modelName, hashtag=False, rules=True):
     hours = []
     created = []
     idTagMapper = {}
-    outputFile = open('data/consolidateData_'+modelName+'_CreatedAt.json', 'w')
+    outputFile = open('data/consolidateData_'+modelName+'.json', 'w')
     for place in placeLabelMapper:
         #print('PLACE: '+place)
         if hashtag:
@@ -303,6 +303,6 @@ def processHist_places(modelName, histNum=5):
 
 
 if __name__ == '__main__':
-    processHist('long1.5', histNumMax=50)
-    #processHist('long1.5', histNum=5)
-    #processTweet('long1.5')
+    #processHist('long1.5', histNumMax=50)
+    processHist('long1.5', histNumMin=5, histNumMax=5)
+    #processTweet('long1.5', hashtag=True)

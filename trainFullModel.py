@@ -7,6 +7,7 @@ from keras.preprocessing import sequence
 from keras.utils import np_utils
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
+from utilities import word2vecReader
 from sklearn.utils.class_weight import compute_sample_weight, compute_class_weight
 import math, pickle, json, sys
 reload(sys)
@@ -18,7 +19,7 @@ posEmbLength = 25
 embeddingVectorLength = 200
 embeddingPOSVectorLength = 20
 charLengthLimit = 20
-batch_size = 10
+batch_size = 100
 
 dayMapper = {'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0}
 
@@ -35,113 +36,131 @@ def hourMapper(hour):
     return output
 
 
-def loadHistData(modelName, char, histNum=5, resultName=''):
+def loadHistData(modelName, histName, char, embedding, resultName, histNum=5):
     print('Loading...')
     histData = {}
-    histFile = open('data/consolidateHistData_' + modelName + '.json', 'r')
+    histFile = open('data/consolidateHistData_' + histName + '.json', 'r')
     for line in histFile:
         data = json.loads(line.strip())
         histData[int(data.keys()[0])] = data.values()[0]
+    histFile.close()
 
-    contents = []
-    labels = []
-    places = []
-    days = []
-    hours = []
-    poss = []
-    ids = []
-    histContents = {}
-    histDayVectors = {}
-    histHourVectors = {}
-    histPOSLists = {}
+    histContents_train = {}
+    histDayVectors_train = {}
+    histHourVectors_train = {}
+    histPOSLists_train = {}
     for i in range(histNum):
-        histContents[i] = []
-        histDayVectors[i] = []
-        histHourVectors[i] = []
-        histPOSLists[i] = []
-    dataFile = open('data/consolidateData_'+modelName+'.json', 'r')
-    for line in dataFile:
-        data = json.loads(line.strip())
-        if data['id'] in histData:
-            histTweets = histData[data['id']]
-            if len(histTweets) >= histNum:
-                contents.append(data['content'].encode('utf-8'))
-                labels.append(data['label'])
-                places.append(data['place'])
-                ids.append(str(data['id']))
-                days.append(np.full((tweetLength), data['day'], dtype='int'))
-                hours.append(np.full((tweetLength), data['hour'], dtype='int'))
-                poss.append(data['pos'].encode('utf-8'))
-                for i in range(histNum):
-                    histContents[i].append(histTweets[i]['content'].encode('utf-8'))
-                    histPOSLists[i].append(histTweets[i]['pos'].encode('utf-8'))
-                    histDayVectors[i].append(np.full((tweetLength), histTweets[i]['day'], dtype='int'))
-                    histHourVectors[i].append(np.full((tweetLength), histTweets[i]['hour'], dtype='int'))
+        histContents_train[i] = []
+        histDayVectors_train[i] = []
+        histHourVectors_train[i] = []
+        histPOSLists_train[i] = []
+
+    contents_train = []
+    labels_train = []
+    places_train = []
+    days_train = []
+    hours_train = []
+    poss_train = []
+    ids_train = []
+    inputFileList = ['data/consolidateData_' + modelName + '_train.json', 'data/consolidateData_' + modelName + '_dev.json', 'data/consolidateData_' + modelName + '_test.json']
+    for inputFilename in inputFileList:
+        inputFile = open(inputFilename, 'r')
+        for line in inputFile:
+            data = json.loads(line.strip())
+            if data['id'] in histData:
+                histTweets = histData[data['id']]
+                if len(histTweets) >= 5:
+                    contents_train.append(data['content'].encode('utf-8'))
+                    labels_train.append(data['label'])
+                    places_train.append(data['place'])
+                    ids_train.append(str(data['id']))
+                    days_train.append(np.full((tweetLength), data['day'], dtype='int'))
+                    hours_train.append(np.full((tweetLength), data['hour'], dtype='int'))
+                    poss_train.append(data['pos'].encode('utf-8'))
+                    for i in range(histNum):
+                        histContents_train[i].append(histTweets[i]['content'].encode('utf-8'))
+                        histPOSLists_train[i].append(histTweets[i]['pos'].encode('utf-8'))
+                        histDayVectors_train[i].append(np.full((tweetLength), histTweets[i]['day'], dtype='int'))
+                        histHourVectors_train[i].append(np.full((tweetLength), histTweets[i]['hour'], dtype='int'))
+        inputFile.close()
 
     for i in range(histNum):
-        histDayVectors[i] = np.array(histDayVectors[i])
-        histHourVectors[i] = np.array(histHourVectors[i])
-    days = np.array(days)
-    hours = np.array(hours)
-    places = np.array(places)
-    ids = np.array(ids)
+        histDayVectors_train[i] = np.array(histDayVectors_train[i])
+        histHourVectors_train[i] = np.array(histHourVectors_train[i])
+    days_train = np.array(days_train)
+    hours_train = np.array(hours_train)
+    places_train = np.array(places_train)
+    ids_train = np.array(ids_train)
 
     if char:
         tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
     else:
         tk = Tokenizer(num_words=vocabSize, char_level=char)
 
-    totalList = contents[:]
+    totalList = contents_train[:]
     for i in range(histNum):
-        totalList += histContents[i]
+        totalList += histContents_train[i]
     tk.fit_on_texts(totalList)
-    tweetSequences = tk.texts_to_sequences(contents)
-    tweetVector = sequence.pad_sequences(tweetSequences, maxlen=tweetLength, truncating='post', padding='post')
+    tweetSequences_train = tk.texts_to_sequences(contents_train)
+    tweetVector_train = sequence.pad_sequences(tweetSequences_train, maxlen=tweetLength, truncating='post', padding='post')
 
-    with open(resultName+'_tweet.tk', 'wb') as handle:
+    with open(resultName + '_tweet.tk', 'wb') as handle:
         pickle.dump(tk, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    histTweetVectors = []
+    histTweetVectors_train = []
     for i in range(histNum):
-        histSequence = tk.texts_to_sequences(histContents[i])
-        tempVector = sequence.pad_sequences(histSequence, maxlen=tweetLength, truncating='post', padding='post')
-        histTweetVectors.append(tempVector)
+        histSequence_train = tk.texts_to_sequences(histContents_train[i])
+        tempVector_train = sequence.pad_sequences(histSequence_train, maxlen=tweetLength, truncating='post', padding='post')
+        histTweetVectors_train.append(tempVector_train)
 
-    embeddings_index = {}
-    embFile = open('../tweetEmbeddingData/glove.twitter.27B.200d.txt', 'r')
-    for line in embFile:
-        values = line.split()
-        word = values[0]
-        coefs = np.asarray(values[1:], dtype='float32')
-        embeddings_index[word] = coefs
-    embFile.close()
-    print('Found %s word vectors.' % len(embeddings_index))
-    word_index = tk.word_index
-    embMatrix = np.zeros((len(word_index) + 1, 200))
-    for word, i in word_index.items():
-        embVector = embeddings_index.get(word)
-        if embVector is not None:
-            embMatrix[i] = embVector
+    if embedding == 'glove':
+        embeddings_index = {}
+        embFile = open('../tweetEmbeddingData/glove.twitter.27B.200d.txt', 'r')
+        for line in embFile:
+            values = line.split()
+            word = values[0]
+            coefs = np.asarray(values[1:], dtype='float32')
+            embeddings_index[word] = coefs
+        embFile.close()
+        print('Found %s word vectors.' % len(embeddings_index))
+        word_index = tk.word_index
+        embMatrix = np.zeros((len(word_index) + 1, 200))
+        for word, i in word_index.items():
+            embVector = embeddings_index.get(word)
+            if embVector is not None:
+                embMatrix[i] = embVector
+    elif embedding == 'word2vec':
+        word_index = tk.word_index
+        w2v = word2vecReader.Word2Vec()
+        embModel = w2v.loadModel()
+        embMatrix = np.zeros((len(word_index) + 1, 400))
+        for word, i in word_index.items():
+            if word in embModel:
+                embMatrix[i] = embModel[word]
+    else:
+        embMatrix = None
+        word_index = None
 
     posVocabSize = 25
     tkPOS = Tokenizer(num_words=posVocabSize, filters='', lower=False)
-    totalPOSList = poss[:]
+    totalPOSList = poss_train[:]
     for i in range(histNum):
-        totalPOSList += histPOSLists[i]
+        totalPOSList += histPOSLists_train[i]
     tkPOS.fit_on_texts(totalPOSList)
-    posSequences = tkPOS.texts_to_sequences(poss)
-    posVector = sequence.pad_sequences(posSequences, maxlen=tweetLength, truncating='post', padding='post')
+
+    posSequences_train = tkPOS.texts_to_sequences(poss_train)
+    posVector_train = sequence.pad_sequences(posSequences_train, maxlen=tweetLength, truncating='post', padding='post')
 
     with open(resultName + '_pos.tk', 'wb') as handle:
         pickle.dump(tkPOS, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    histPOSVectors = []
+    histPOSVectors_train = []
     for i in range(histNum):
-        histPOSSequences = tkPOS.texts_to_sequences(histPOSLists[i])
-        histPOSVector = sequence.pad_sequences(histPOSSequences, maxlen=tweetLength, truncating='post', padding='post')
-        histPOSVectors.append(histPOSVector)
+        histPOSSequences_train = tkPOS.texts_to_sequences(histPOSLists_train[i])
+        histPOSVector_train = sequence.pad_sequences(histPOSSequences_train, maxlen=tweetLength, truncating='post', padding='post')
+        histPOSVectors_train.append(histPOSVector_train)
 
-    return ids, labels, places, contents, days, hours, poss, tweetVector, posVector, histTweetVectors, histDayVectors, histHourVectors, histPOSVectors, posVocabSize, embMatrix, word_index
+    return ids_train, labels_train, places_train, contents_train, days_train, hours_train, poss_train, tweetVector_train, posVector_train, histTweetVectors_train, histDayVectors_train, histHourVectors_train, histPOSVectors_train, posVocabSize, embMatrix, word_index
 
 
 def trainLSTM(modelName, balancedWeight='None', char=False, epochs=4):
@@ -247,14 +266,15 @@ def trainLSTM(modelName, balancedWeight='None', char=False, epochs=4):
     model.save_weights('model/LSTM_' + modelName + '_' + str(balancedWeight) + '.h5')
 
 
-def trainHybridLSTM(modelName, balancedWeight='None', char=False, histNum=1, epochs=7):
-    resultName = 'result/model/C-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight
-    ids, labels, places, contents, dayVector, hourVector, posList, tweetVector, posVector, histTweetVectors, histDayVector, histHourVector, histPOSVectors, posVocabSize, embMatrix, word_index = loadHistData(
-        modelName, char, histNum=histNum, resultName=resultName)
-    labelNum = len(np.unique(labels))
-    labels = np.array(labels)
+def trainHybridLSTM(modelName, histName, balancedWeight='None', embedding='glove', char=False, histNum=5, epochs=7):
+    resultName = 'model/J-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight
+    ids_train, labels_train, places_train, contents_train, days_train, hours_train, poss_train, tweetVector_train, posVector_train, histTweetVectors_train, histDayVectors_train, \
+    histHourVectors_train, histPOSVectors_train, posVocabSize, embMatrix, word_index = loadHistData(modelName, histName, char, embedding, resultName=resultName, histNum=histNum)
+
+    labelNum = len(np.unique(labels_train))
     encoder = LabelEncoder()
-    encoder.fit(labels)
+    encoder.fit(labels_train)
+    labels_train = encoder.transform(labels_train)
     labelList = encoder.classes_.tolist()
     print('Labels: ' + str(labelList))
     labelFile = open(resultName + '.label', 'a')
@@ -304,29 +324,24 @@ def trainHybridLSTM(modelName, balancedWeight='None', char=False, histNum=1, epo
     #print(model.summary())
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-    histTweetVector_train = []
-    histDayVector_train = []
-    histHourVector_train = []
-    histPOSVector_train = []
-
-    tweet_train = tweetVector[:-(len(tweetVector) % batch_size)]
-    labels_train = labels[:-(len(labels) % batch_size)]
-    day_train = dayVector[:-(len(dayVector) % batch_size)]
-    hour_train = hourVector[:-(len(hourVector) % batch_size)]
-    pos_train = posVector[:-(len(posVector) % batch_size)]
+    tweet_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+    labels_train = labels_train[:-(len(labels_train) % batch_size)]
+    days_train = days_train[:-(len(days_train) % batch_size)]
+    hours_train = hours_train[:-(len(hours_train) % batch_size)]
+    posVector_train = posVector_train[:-(len(posVector_train) % batch_size)]
     for i in range(histNum):
-        histTweetVector_train.append(histTweetVectors[i][:-(len(histTweetVectors[i]) % batch_size)])
-        histDayVector_train.append(histDayVector[i][:-(len(histDayVector[i]) % batch_size)])
-        histHourVector_train.append(histHourVector[i][:-(len(histHourVector[i]) % batch_size)])
-        histPOSVector_train.append(histPOSVectors[i][:-(len(histPOSVectors[i]) % batch_size)])
+        histTweetVectors_train[i] = histTweetVectors_train[i][:-(len(histTweetVectors_train[i]) % batch_size)]
+        histDayVectors_train[i] = histDayVectors_train[i][:-(len(histDayVectors_train[i]) % batch_size)]
+        histHourVectors_train[i] = histHourVectors_train[i][:-(len(histHourVectors_train[i]) % batch_size)]
+        histPOSVectors_train[i] = histPOSVectors_train[i][:-(len(histPOSVectors_train[i]) % batch_size)]
 
-    labelVector_train = np_utils.to_categorical(encoder.transform(labels_train))
+    labelVector_train = np_utils.to_categorical(labels_train)
 
-    trainList = [tweet_train, day_train, hour_train, pos_train]
+    trainList = [tweet_train, days_train, hours_train, posVector_train]
     for i in range(histNum):
-        trainList += [histTweetVector_train[i], histDayVector_train[i], histHourVector_train[i], histPOSVector_train[i]]
+        trainList += [histTweetVectors_train[i], histDayVectors_train[i], histHourVectors_train[i], histPOSVectors_train[i]]
 
-    verbose=0
+    verbose = 1
     if balancedWeight == 'sample':
         sampleWeight = compute_sample_weight('balanced', labels_train)
         model.fit(trainList, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
@@ -341,10 +356,9 @@ def trainHybridLSTM(modelName, balancedWeight='None', char=False, histNum=1, epo
         json_file.write(model_json)
     model.save_weights(resultName+'_model.h5')
 
-    print('DONE')
-
+    print('FINSIHED')
 
 
 if __name__ == '__main__':
     #trainLSTM('long1.5', 'none', char=False)
-    trainHybridLSTM('long1.5', 'none', char=False, histNum=5, epochs=4)
+    trainHybridLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=26)

@@ -10,7 +10,7 @@ POSMapper = {'N': 'N', 'O': 'N', '^': 'N', 'S': 'N', 'Z': 'N', 'L': 'N', 'M': 'N
              'V': 'V', 'A': 'A', 'R': 'R', '@': '@', '#': '#', '~': '~', 'E': 'E', ',': ',', 'U': 'U',
              '!': '0', 'D': '0', 'P': '0', '&': '0', 'T': '0', 'X': '0', 'Y': '0', '$': '0', 'G': '0'}
 tweetLength = 25
-batch_size = 10
+batch_size = 100
 
 def hourMapper(hour):
     input = int(hour)
@@ -241,4 +241,4 @@ def activityPredict(brandFileName, fileName, histNum=3):
 
 
 if __name__ == '__main__':
-    activityPredict('lists/popularAccount5.list', 'result/model/C-Hist-Context-POST-LSTM_long1.5_none', histNum=5)
+    activityPredict('lists/popularAccount5.list', 'model/J-Hist-Context-POST-LSTM_long1.5_class', histNum=5)

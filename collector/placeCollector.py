@@ -148,7 +148,7 @@ def GooglePlaceCollector():
             for token in nextPageTokens:
                 requestNum += 1
                 if requestNum > requestLimit:
-                    print 'wait for 25 hours'
+                    print 'wait for 24 hours'
                     time.sleep(86400)
                     requestNum = 1
                 url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + 'pagetoken=' + token

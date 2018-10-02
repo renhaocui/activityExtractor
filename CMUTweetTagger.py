@@ -276,6 +276,6 @@ def processUserTweetTag(fileName, hashtag=True):
 
 
 if __name__ == "__main__":
-    #processTweetTag(hashtag=False)
+    processTweetTag(hashtag=True)
     #processHistTag(hashtag=False, maxHistNum=50)
-    processUserTweetTag('lists/popularAccount4.list', hashtag=False)
+    #processUserTweetTag('lists/popularAccount4.list', hashtag=False)
