@@ -2,6 +2,7 @@ from keras.models import model_from_json
 import json, re, pickle, sys
 from keras.preprocessing import sequence
 import numpy as np
+from keras_self_attention import SeqSelfAttention
 reload(sys)
 sys.setdefaultencoding('utf8')
 
@@ -111,7 +112,7 @@ def activityPredict(brandFileName, fileName, histNum=3):
     modelFile = open(fileName + '_model.json', 'r')
     model_load = modelFile.read()
     modelFile.close()
-    model = model_from_json(model_load)
+    model = model_from_json(model_load, custom_objects=SeqSelfAttention.get_custom_objects())
     model.load_weights(fileName + '_model.h5')
     tkTweet = pickle.load(open(fileName + '_tweet.tk', 'rb'))
     tkPOS = pickle.load(open(fileName + '_pos.tk', 'rb'))
@@ -219,22 +220,27 @@ def activityPredict(brandFileName, fileName, histNum=3):
         for i in range(histNum):
             featureList += [histTweetVectors[i], histDayVectors[i], histHourVectors[i], histPOSVectors[i]]
         #print len(featureList)
-        predictions = model.predict(featureList, batch_size=batch_size)
+        try:
+            predictions = model.predict(featureList, batch_size=batch_size)
 
-        userTweetDist = {}
-        for index, tweetDist in enumerate(predictions):
-            user = indexUserMapper[index]
-            if user not in userTweetDist:
-                userTweetDist[user] = np.zeros([1, 6])
-            userTweetDist[user] = np.concatenate((userTweetDist[user], [tweetDist]), axis=0)
+            userTweetDist = {}
+            for index, tweetDist in enumerate(predictions):
+                user = indexUserMapper[index]
+                if user not in userTweetDist:
+                    userTweetDist[user] = np.zeros([1, 6])
+                userTweetDist[user] = np.concatenate((userTweetDist[user], [tweetDist]), axis=0)
 
-        userAvgDist = {}
-        for user, tweetDist in userTweetDist.items():
-            userAvgDist[user] = np.divide(np.sum(tweetDist, axis=0), len(tweetDist) - 1)
-        accountDist = np.divide(np.sum(userAvgDist.values(), axis=0), len(userAvgDist))
+            userAvgDist = {}
+            for user, tweetDist in userTweetDist.items():
+                userAvgDist[user] = np.divide(np.sum(tweetDist, axis=0), len(tweetDist) - 1)
+            accountDist = np.divide(np.sum(userAvgDist.values(), axis=0), len(userAvgDist))
 
-        out = npDist2Str(accountDist)
-        resultFile.write(brand+'\t'+out+'\n')
+            out = npDist2Str(accountDist)
+        except:
+            print ('Error in processing: '+brand)
+            out = ''
+        finally:
+            resultFile.write(brand+'\t'+out+'\n')
 
     resultFile.close()
 

@@ -1,6 +1,6 @@
 import json, re, sys, time, datetime
 import numpy as np
-from keras.layers import Dense, LSTM, Input
+from keras.layers import Dense, LSTM, Input, Lambda, Flatten
 from keras.layers.embeddings import Embedding
 from keras.models import Model
 from keras.preprocessing import sequence
@@ -14,11 +14,9 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 from utilities import word2vecReader
 from keras.layers.wrappers import TimeDistributed
 from utilities import tokenizer, evaluation
-from keras.layers import Layer
-from keras import backend as K
-from keras import initializers
 from gensim.models import Word2Vec
 from wordsegment import load, segment
+from keras_self_attention import SeqSelfAttention
 load()
 reload(sys)
 sys.setdefaultencoding('utf8')
@@ -38,32 +36,6 @@ POSMapper = {'N': 'N', 'O': 'O', '^': 'AA', 'S': 'S', 'Z': 'Z', 'L': 'L', 'M': '
 POSMapper2 = {'N': 'N', 'O': 'O', 'AA': '^', 'S': 'S', 'Z': 'Z', 'L': 'L', 'M': 'M',
              'V': 'V', 'A': 'A', 'R': 'R', 'BB': '@', 'CC': '#', 'DD': '~', 'E': 'E', 'EE': ',', 'U': 'U',
              'FF': '!', 'D': 'D', 'P': 'P', 'GG': '&', 'T': 'T', 'X': 'X', 'Y': 'Y', 'HH': '$', 'G': 'G'}
-
-class AttLayer(Layer):
-    def __init__(self, **kwargs):
-        self.init = initializers.get('normal')
-        #self.input_spec = [InputSpec(ndim=3)]
-        super(AttLayer, self).__init__(** kwargs)
-
-    def build(self, input_shape):
-        assert len(input_shape)==3
-        #self.W = self.init((input_shape[-1],1))
-        self.W = self.init((input_shape[-1],))
-        #self.input_spec = [InputSpec(shape=input_shape)]
-        self.trainable_weights = [self.W]
-        super(AttLayer, self).build(input_shape)  # be sure you call this somewhere!
-
-    def call(self, x, mask=None):
-        eij = K.tanh(K.dot(x, self.W))
-
-        ai = K.exp(eij)
-        weights = ai/K.sum(ai, axis=1).dimshuffle(0,'x')
-
-        weighted_input = x*weights.dimshuffle(0,1,'x')
-        return weighted_input.sum(axis=1)
-
-    def get_output_shape_for(self, input_shape):
-        return (input_shape[0], input_shape[-1])
 
 
 def hourMapper(hour):
@@ -458,7 +430,6 @@ def loadHistData(modelName, histName, char, embedding, histNum=5, pos=False, dev
             histPOSVectors_val.append(histPOSVector_val)
 
         return ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, poss_train, poss_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, histPOSVectors_train, histPOSVectors_val, posVocabSize, embMatrix, word_index
-
 
 
 def processPOSLSTM(modelName, balancedWeight='None', embedding='None', char=False, posMode='all', hashtag=True, epochs=4):
@@ -1100,6 +1071,135 @@ def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None'
     print(f1 + ' ' + f1STD)
 
 
+def processHistAttLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=4, dev=False):
+    resultName = 'result/H-Att-HistLSTM_' + modelName + '_' + balancedWeight
+    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
+    tweetVector_train, tweetVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, embMatrix, word_index = loadHistData(modelName, histName, char, embedding, histNum=histNum, pos=False, dev=dev)
+
+    labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
+    encoder = LabelEncoder()
+    encoder.fit(np.concatenate([labels_train, labels_val]))
+    labels_train = encoder.transform(labels_train)
+    labels_val = encoder.transform(labels_val)
+    labelList = encoder.classes_.tolist()
+    print('Labels: ' + str(labelList))
+    labelFile = open(resultName + '.label', 'a')
+    labelFile.write(str(labelList) + '\n')
+    labelFile.close()
+
+    dataVector_train = []
+    for index, tweet in enumerate(tweetVector_train):
+        temp = []
+        for vector in reversed(histTweetVectors_train):
+            temp.append(vector[index])
+        temp.append(tweet)
+        dataVector_train.append(temp)
+    dataVector_train = np.array(dataVector_train)
+
+    dataVector_val = []
+    for index, tweet in enumerate(tweetVector_val):
+        temp = []
+        for vector in reversed(histTweetVectors_val):
+            temp.append(vector[index])
+        temp.append(tweet)
+        dataVector_val.append(temp)
+    dataVector_val = np.array(dataVector_val)
+
+    # training
+    print('training...')
+    if dev:
+        verbose = 2
+    else:
+        verbose = 0
+    eval = evaluation.evalMetrics(labelNum)
+
+    input = Input(batch_shape=(batch_size, histNum+1, tweetLength,), name='input')
+    if embedding in ['glove', 'word2vec']:
+        embedding = TimeDistributed(Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True), name='embedding')(input)
+    else:
+        embedding = TimeDistributed(Embedding(vocabSize, embeddingVectorLength))(input)
+    lower_lstm = TimeDistributed(LSTM(200, dropout=0.2, recurrent_dropout=0.2), name='lower_lstm')(embedding)
+    #self_attention_lower = SeqSelfAttention(attention_activation='sigmoid')(lower_lstm)
+    #last_timestep_lower = Lambda(lambda x: x[:, -1, :])(self_attention)
+    higher_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, name='higher_lstm', return_sequences=True)(lower_lstm)
+    self_attention = SeqSelfAttention(attention_activation='sigmoid')(higher_lstm)
+    #flatten_result = Flatten()(self_attention)
+    last_timestep = Lambda(lambda x: x[:, -1, :])(self_attention)
+    output = Dense(labelNum, activation='softmax', name='output')(last_timestep)
+    model = Model(inputs=input, outputs=output)
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.summary()
+
+    if len(labels_train) % batch_size != 0:
+        dataVector_train = dataVector_train[:-(len(dataVector_train) % batch_size)]
+        labels_train = labels_train[:-(len(labels_train) % batch_size)]
+    if len(labels_val) % batch_size != 0:
+        dataVector_val = dataVector_val[:-(len(dataVector_val) % batch_size)]
+        labels_val = labels_val[:-(len(labels_val) % batch_size)]
+        places_val = places_val[:-(len(places_val) % batch_size)]
+        ids_val = ids_val[:-(len(ids_val) % batch_size)]
+
+    labelVector_train = np_utils.to_categorical(labels_train)
+    labelVector_val = np_utils.to_categorical(labels_val)
+
+    if balancedWeight == 'sample':
+        sampleWeight = compute_sample_weight('balanced', labels_train)
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, validation_data=(dataVector_val, labelVector_val), batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
+    elif balancedWeight == 'class':
+        classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, validation_data=(dataVector_val, labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+    else:
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, validation_data=(dataVector_val, labelVector_val), batch_size=batch_size, verbose=verbose)
+
+    accuracyHist = trainHistory.history['val_acc']
+    lossHist = trainHistory.history['val_loss']
+
+    tuneFile = open(resultName + '.tune', 'a')
+    tuneFile.write('Hist Num: ' + str(histNum) + '\n')
+    for index, loss in enumerate(lossHist):
+        tuneFile.write(str(index + 1) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
+    tuneFile.write('\n')
+    tuneFile.close()
+
+    scores = model.evaluate(dataVector_val, labelVector_val, batch_size=batch_size, verbose=0)
+    print("Accuracy: %.2f%%" % (scores[1] * 100))
+
+    predictions = model.predict(dataVector_val, batch_size=batch_size)
+    sampleFile = open(resultName + '.sample', 'a')
+    predLabels = []
+    trueLabel_val = encoder.inverse_transform(labels_val)
+    for index, pred in enumerate(predictions):
+        predLabel = labelList[pred.tolist().index(max(pred))]
+        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        predLabels.append(predLabel)
+    sampleFile.close()
+    eval.addEval(scores[1], trueLabel_val, predLabels)
+
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    confusionFile = open(resultName + '.confMatrix', 'a')
+    resultFile = open(resultName + '.result', 'a')
+    for row in conMatrix:
+        lineOut = ''
+        for line in row:
+            lineOut += str(line) + '\t'
+        confusionFile.write(lineOut.strip() + '\n')
+    confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    confusionFile.close()
+    resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
+
+
 def processHistLSTM_period(modelName, balancedWeight='None', embedding='None', periodNum=5, epochs=4, tune=False):
     print('Loading...')
     resultName = 'result/H-HistLSTM_period_' + str(periodNum) + '_' + modelName + '_' + balancedWeight
@@ -1645,7 +1745,8 @@ if __name__ == '__main__':
     #processHistLSTM_time('long1.5', 'none', 'glove', char=False, posMode='all', hashtag=False, epochs=16)
 
     #processHistLSTM(modelName, histName, 'none', embModel, char=False, histNum=5, epochs=15, dev=False)
-    processHistLSTM(modelName, histName, 'class', embModel, char=False, histNum=5, epochs=15, dev=True)
+    #processHistLSTM(modelName, histName, 'class', embModel, char=False, histNum=5, epochs=15, dev=True)
+    processHistAttLSTM(modelName, histName, 'class', embModel, char=False, histNum=5, epochs=10, dev=True)
 
     #processMIXLSTM('long1.5', 'none', 'glove', char=False, posMode='all', epochs=7)
     #processMIXLSTM('long1.5', 'class', 'none', char=False, posMode='all', epochs=3)

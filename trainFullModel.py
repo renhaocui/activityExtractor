@@ -1,6 +1,6 @@
 from keras.preprocessing.text import Tokenizer
 from keras.models import Sequential
-from keras.layers import Dense, LSTM, Dropout, Merge, Input, concatenate
+from keras.layers import Dense, LSTM, Dropout, Merge, Input, concatenate, Lambda
 from keras.layers.embeddings import Embedding
 from keras.models import Model
 from keras.preprocessing import sequence
@@ -10,6 +10,7 @@ import numpy as np
 from utilities import word2vecReader
 from sklearn.utils.class_weight import compute_sample_weight, compute_class_weight
 import math, pickle, json, sys
+from keras_self_attention import SeqSelfAttention
 reload(sys)
 sys.setdefaultencoding('utf8')
 
@@ -359,6 +360,104 @@ def trainHybridLSTM(modelName, histName, balancedWeight='None', embedding='glove
     print('FINSIHED')
 
 
+def trainHybridAttLSTM(modelName, histName, balancedWeight='None', embedding='glove', char=False, histNum=5, epochs=7):
+    resultName = 'model/J-Hist-Context-POST-LSTM_' + modelName + '_' + balancedWeight
+    ids_train, labels_train, places_train, contents_train, days_train, hours_train, poss_train, tweetVector_train, posVector_train, histTweetVectors_train, histDayVectors_train, \
+    histHourVectors_train, histPOSVectors_train, posVocabSize, embMatrix, word_index = loadHistData(modelName, histName, char, embedding, resultName=resultName, histNum=histNum)
+
+    labelNum = len(np.unique(labels_train))
+    encoder = LabelEncoder()
+    encoder.fit(labels_train)
+    labels_train = encoder.transform(labels_train)
+    labelList = encoder.classes_.tolist()
+    print('Labels: ' + str(labelList))
+    labelFile = open(resultName + '.label', 'a')
+    labelFile.write(str(labelList) + '\n')
+    labelFile.close()
+
+    # training
+    print('training...')
+    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    shared_embedding_tweet = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
+    embedding_tweet = shared_embedding_tweet(input_tweet)
+
+    input_day = Input(batch_shape=(batch_size, tweetLength,))
+    input_hour = Input(batch_shape=(batch_size, tweetLength,))
+    input_pos = Input(batch_shape=(batch_size, posEmbLength,))
+
+    shared_embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)
+    shared_embedding_day = Embedding(20, embeddingPOSVectorLength)
+    shared_embedding_hour = Embedding(20, embeddingPOSVectorLength)
+    embedding_day = shared_embedding_day(input_day)
+    embedding_hour = shared_embedding_hour(input_hour)
+    embedding_pos = shared_embedding_pos(input_pos)
+
+    comb = concatenate([embedding_tweet, embedding_day, embedding_hour, embedding_pos])
+    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(comb)
+    self_attention = SeqSelfAttention(attention_activation='sigmoid')(tweet_lstm)
+    last_timestep = Lambda(lambda x: x[:, -1, :])(self_attention)
+
+    conList = [last_timestep]
+    inputList = [input_tweet, input_day, input_hour, input_pos]
+    for i in range(histNum):
+        input_hist = Input(batch_shape=(batch_size, tweetLength,))
+        input_day_temp = Input(batch_shape=(batch_size, tweetLength,))
+        input_hour_temp = Input(batch_shape=(batch_size, tweetLength,))
+        input_pos_temp = Input(batch_shape=(batch_size, posEmbLength,))
+        embedding_hist_temp = shared_embedding_tweet(input_hist)
+        embedding_day_temp = shared_embedding_day(input_day_temp)
+        embedding_hour_temp = shared_embedding_hour(input_hour_temp)
+        embedding_pos_temp = shared_embedding_pos(input_pos_temp)
+        comb_temp = concatenate([embedding_hist_temp, embedding_day_temp, embedding_hour_temp, embedding_pos_temp])
+        lstm_temp = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(comb_temp)
+        self_attention_temp = SeqSelfAttention(attention_activation='sigmoid')(lstm_temp)
+        last_timestep_temp = Lambda(lambda x: x[:, -1, :])(self_attention_temp)
+        conList.append(last_timestep_temp)
+        inputList += [input_hist, input_day_temp, input_hour_temp, input_pos_temp]
+
+    comb_total = concatenate(conList)
+    output = Dense(labelNum, activation='softmax', name='output')(comb_total)
+    model = Model(inputs=inputList, outputs=output)
+    #print(model.summary())
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    tweet_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+    labels_train = labels_train[:-(len(labels_train) % batch_size)]
+    days_train = days_train[:-(len(days_train) % batch_size)]
+    hours_train = hours_train[:-(len(hours_train) % batch_size)]
+    posVector_train = posVector_train[:-(len(posVector_train) % batch_size)]
+    for i in range(histNum):
+        histTweetVectors_train[i] = histTweetVectors_train[i][:-(len(histTweetVectors_train[i]) % batch_size)]
+        histDayVectors_train[i] = histDayVectors_train[i][:-(len(histDayVectors_train[i]) % batch_size)]
+        histHourVectors_train[i] = histHourVectors_train[i][:-(len(histHourVectors_train[i]) % batch_size)]
+        histPOSVectors_train[i] = histPOSVectors_train[i][:-(len(histPOSVectors_train[i]) % batch_size)]
+
+    labelVector_train = np_utils.to_categorical(labels_train)
+
+    trainList = [tweet_train, days_train, hours_train, posVector_train]
+    for i in range(histNum):
+        trainList += [histTweetVectors_train[i], histDayVectors_train[i], histHourVectors_train[i], histPOSVectors_train[i]]
+
+    verbose = 1
+    if balancedWeight == 'sample':
+        sampleWeight = compute_sample_weight('balanced', labels_train)
+        model.fit(trainList, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
+    elif balancedWeight == 'class':
+        classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
+        model.fit(trainList, labelVector_train, epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+    else:
+        model.fit(trainList, labelVector_train, epochs=epochs, batch_size=batch_size, verbose=verbose)
+
+    model_json = model.to_json()
+    with open(resultName+'_model.json', 'w') as json_file:
+        json_file.write(model_json)
+    model.save_weights(resultName+'_model.h5')
+
+    print('FINSIHED')
+
+
+
 if __name__ == '__main__':
     #trainLSTM('long1.5', 'none', char=False)
-    trainHybridLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=26)
+    #trainHybridLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=26)
+    trainHybridAttLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=14)

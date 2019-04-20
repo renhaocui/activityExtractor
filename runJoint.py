@@ -1,6 +1,6 @@
 import json, re, time, datetime, sys
 import numpy as np
-from keras.layers import Dense, LSTM, Input, concatenate, Flatten
+from keras.layers import Dense, LSTM, Input, concatenate, Flatten, Lambda
 from keras.layers.embeddings import Embedding
 from keras.models import Model
 from keras.preprocessing import sequence
@@ -13,6 +13,7 @@ from utilities import word2vecReader
 from keras import backend as K
 from wordsegment import load, segment
 from utilities import tokenizer, evaluation
+from keras_self_attention import SeqSelfAttention
 reload(sys)
 sys.setdefaultencoding('utf8')
 load()
@@ -758,6 +759,142 @@ def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
     print(f1 + ' ' + f1STD)
 
 
+def processAttPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
+    resultName = 'result/J-Att-POSTLSTM_' + modelName + '_' + balancedWeight
+    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, \
+    hourList_train, hourList_val, posList_train, posList_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadData(
+        modelName, char, embedding, pos=True, dev=dev)
+
+    labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
+    dayVector_train = to_categorical(dayList_train, num_classes=7)
+    hourVector_train = to_categorical(hourList_train, num_classes=4)
+    dayVector_val = to_categorical(dayList_val, num_classes=7)
+    hourVector_val = to_categorical(hourList_val, num_classes=4)
+
+    encoder = LabelEncoder()
+    encoder.fit(np.concatenate([labels_train, labels_val]))
+    labels_train = encoder.transform(labels_train)
+    labels_val = encoder.transform(labels_val)
+    labelList = encoder.classes_.tolist()
+    print('Labels: ' + str(labelList))
+    labelFile = open(resultName + '.label', 'a')
+    labelFile.write(str(labelList) + '\n')
+    labelFile.close()
+
+    # training
+    print('training...')
+    if dev:
+        verbose = 2
+    else:
+        verbose = 0
+    eval = evaluation.evalMetrics(labelNum)
+
+    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    if embedding in ['glove', 'word2vec']:
+        embedding_tweet = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_tweet)
+    else:
+        embedding_tweet = Embedding(vocabSize, embeddingVectorLength)(input_tweet)
+    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_tweet)
+    tweet_self_attention = SeqSelfAttention(attention_activation='sigmoid')(tweet_lstm)
+    tweet_last_timestep = Lambda(lambda x: x[:, -1, :])(tweet_self_attention)
+
+    input_pos = Input(batch_shape=(batch_size, posEmbLength,))
+    embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)(input_pos)
+    pos_lstm = LSTM(20, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_pos)
+    pos_self_attention = SeqSelfAttention(attention_activation='sigmoid')(pos_lstm)
+    pos_last_timestep = Lambda(lambda x: x[:, -1, :])(pos_self_attention)
+
+    input_day = Input(batch_shape=(batch_size, 7,))
+    #day_dense = Dense(20, activation='relu', name='day')(input_day)
+    day_embedding = Embedding(20, 1)(input_day)
+    day = Flatten()(day_embedding)
+    input_hour = Input(batch_shape=(batch_size, 4,))
+    #hour_dense = Dense(20, activation='relu', name='hour')(input_hour)
+    hour_embedding = Embedding(20, 1)(input_hour)
+    hour = Flatten()(hour_embedding)
+    #comb = concatenate([tweet_lstm, day_dense, hour_dense, pos_lstm])
+    comb = concatenate([tweet_last_timestep, day, hour, pos_last_timestep])
+
+    output = Dense(labelNum, activation='softmax', name='output')(comb)
+    model = Model(inputs=[input_tweet, input_day, input_hour, input_pos], outputs=output)
+    #print model.summary()
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    if len(labels_train) % batch_size != 0:
+        tweetVector_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+        labels_train = labels_train[:-(len(labels_train) % batch_size)]
+        hourVector_train = hourVector_train[:-(len(hourVector_train) % batch_size)]
+        dayVector_train = dayVector_train[:-(len(dayVector_train) % batch_size)]
+        posVector_train = posVector_train[:-(len(posVector_train) % batch_size)]
+    if len(labels_val) % batch_size != 0:
+        tweetVector_val = tweetVector_val[:-(len(tweetVector_val) % batch_size)]
+        labels_val = labels_val[:-(len(labels_val) % batch_size)]
+        hourVector_val = hourVector_val[:-(len(hourVector_val) % batch_size)]
+        dayVector_val = dayVector_val[:-(len(dayVector_val) % batch_size)]
+        posVector_val = posVector_val[:-(len(posVector_val) % batch_size)]
+        places_val = places_val[:-(len(places_val) % batch_size)]
+        ids_val = ids_val[:-(len(ids_val) % batch_size)]
+
+    labelVector_train = np_utils.to_categorical(labels_train)
+    labelVector_val = np_utils.to_categorical(labels_val)
+
+    if balancedWeight == 'sample':
+        sampleWeight = compute_sample_weight('balanced', labels_train)
+        trainHistory = model.fit([tweetVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
+    elif balancedWeight == 'class':
+        classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
+        trainHistory = model.fit([tweetVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([tweetVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+    else:
+        trainHistory = model.fit([tweetVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([tweetVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val), batch_size=batch_size, verbose=verbose)
+
+    accuracyHist = trainHistory.history['val_acc']
+    lossHist = trainHistory.history['val_loss']
+
+    tuneFile = open(resultName + '.tune', 'a')
+    for index, loss in enumerate(lossHist):
+        tuneFile.write(str(index) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
+    tuneFile.write('\n')
+    tuneFile.close()
+
+    scores = model.evaluate([tweetVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val, batch_size=batch_size, verbose=0)
+    print("Accuracy: %.2f%%" % (scores[1] * 100))
+
+    predictions = model.predict([tweetVector_val, dayVector_val, hourVector_val, posVector_val], batch_size=batch_size)
+    sampleFile = open(resultName + '.sample', 'a')
+    predLabels = []
+    trueLabel_val = encoder.inverse_transform(labels_val)
+    for index, pred in enumerate(predictions):
+        predLabel = labelList[pred.tolist().index(max(pred))]
+        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        predLabels.append(predLabel)
+    sampleFile.close()
+    eval.addEval(scores[1], trueLabel_val, predLabels)
+
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open(resultName + '.result', 'a')
+    confusionFile = open(resultName + '.confMatrix', 'a')
+    for row in conMatrix:
+        lineOut = ''
+        for line in row:
+            lineOut += str(line) + '\t'
+        confusionFile.write(lineOut.strip() + '\n')
+    confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    confusionFile.close()
+    resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
+
+
 def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
     resultName = 'result/J-HistLSTM_' + modelName + '_' + balancedWeight
     ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
@@ -798,6 +935,139 @@ def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None'
         embedding_hist = shared_embedding(input_hist)
         hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
         conList.append(hist_lstm)
+        inputList.append(input_hist)
+
+    comb = concatenate(conList)
+    output = Dense(labelNum, activation='softmax', name='output')(comb)
+    model = Model(inputs=inputList, outputs=output)
+    print(model.summary())
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    if len(labels_train) % batch_size != 0:
+        labels_train = labels_train[:-(len(labels_train) % batch_size)]
+        tweetVector_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+        for i in range(histNum):
+            histTweetVectors_train[i] = histTweetVectors_train[i][:-(len(histTweetVectors_train[i]) % batch_size)]
+    if len(labels_val) % batch_size != 0:
+        tweetVector_val = tweetVector_val[:-(len(tweetVector_val) % batch_size)]
+        for i in range(histNum):
+            histTweetVectors_val[i] = histTweetVectors_val[i][:-(len(histTweetVectors_val[i]) % batch_size)]
+        labels_val = labels_val[:-(len(labels_val) % batch_size)]
+        places_val = places_val[:-(len(places_val) % batch_size)]
+        ids_val = ids_val[:-(len(ids_val) % batch_size)]
+
+    dataVector_train = [tweetVector_train]
+    dataVector_val = [tweetVector_val]
+    for histVector in histTweetVectors_train:
+        dataVector_train.append(histVector)
+    for histVector in histTweetVectors_val:
+        dataVector_val.append(histVector)
+
+    labelVector_train = np_utils.to_categorical(labels_train)
+    labelVector_val = np_utils.to_categorical(labels_val)
+
+    if balancedWeight == 'sample':
+        sampleWeight = compute_sample_weight('balanced', labels_train)
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=0)
+    elif balancedWeight == 'class':
+        classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, validation_data=(dataVector_val, labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+    else:
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, validation_data=(dataVector_val, labelVector_val), batch_size=batch_size, verbose=verbose)
+
+    accuracyHist = trainHistory.history['val_acc']
+    lossHist = trainHistory.history['val_loss']
+
+    tuneFile = open(resultName + '.tune', 'a')
+    tuneFile.write('Hist Num: '+str(histNum)+'\n')
+    for index, loss in enumerate(lossHist):
+        tuneFile.write(str(index+1) + '\t' + str(loss)+'\t'+str(accuracyHist[index])+'\n')
+    tuneFile.write('\n')
+    tuneFile.close()
+
+    scores = model.evaluate(dataVector_val, labelVector_val, batch_size=batch_size, verbose=0)
+    print("Accuracy: %.2f%%" % (scores[1] * 100))
+
+    predictions = model.predict(dataVector_val, batch_size=batch_size)
+    sampleFile = open(resultName + '.sample', 'a')
+    predLabels = []
+    trueLabel_val = encoder.inverse_transform(labels_val)
+    for index, pred in enumerate(predictions):
+        predLabel = labelList[pred.tolist().index(max(pred))]
+        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        predLabels.append(predLabel)
+    sampleFile.close()
+    eval.addEval(scores[1], trueLabel_val, predLabels)
+
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    confusionFile = open(resultName + '.confMatrix', 'a')
+    resultFile = open(resultName + '.result', 'a')
+    for row in conMatrix:
+        lineOut = ''
+        for line in row:
+            lineOut += str(line) + '\t'
+        confusionFile.write(lineOut.strip() + '\n')
+    confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    confusionFile.close()
+    resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
+
+
+def processAttHistLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
+    resultName = 'result/J-Att-HistLSTM_' + modelName + '_' + balancedWeight
+    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
+    tweetVector_train, tweetVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, embMatrix, word_index = loadHistData(
+        modelName, histName, char, embedding, histNum=histNum, pos=False, dev=dev)
+
+    labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
+    encoder = LabelEncoder()
+    encoder.fit(np.concatenate([labels_train, labels_val]))
+    labels_train = encoder.transform(labels_train)
+    labels_val = encoder.transform(labels_val)
+    labelList = encoder.classes_.tolist()
+    print('Labels: ' + str(labelList))
+    labelFile = open(resultName + '.label', 'a')
+    labelFile.write(str(labelList) + '\n')
+    labelFile.close()
+    # training
+    if dev:
+        verbose = 2
+    else:
+        verbose = 0
+    print('training...')
+    eval = evaluation.evalMetrics(labelNum)
+
+    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    if embedding in ['glove', 'word2vec']:
+        shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
+        embedding_tweet = shared_embedding(input_tweet)
+    else:
+        shared_embedding = Embedding(vocabSize, embeddingVectorLength)
+        embedding_tweet = shared_embedding(input_tweet)
+    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_tweet)
+    tweet_self_attention = SeqSelfAttention(attention_activation='sigmoid')(tweet_lstm)
+    tweet_last_timestep = Lambda(lambda x: x[:, -1, :])(tweet_self_attention)
+
+    conList = [tweet_last_timestep]
+    inputList = [input_tweet]
+    for i in range(histNum):
+        input_hist = Input(batch_shape=(batch_size, posEmbLength,))
+        embedding_hist = shared_embedding(input_hist)
+        hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_hist)
+        hist_self_attention = SeqSelfAttention(attention_activation='sigmoid')(hist_lstm)
+        hist_last_timestep = Lambda(lambda x: x[:, -1, :])(hist_self_attention)
+        conList.append(hist_last_timestep)
         inputList.append(input_hist)
 
     comb = concatenate(conList)
@@ -1295,24 +1565,212 @@ def processHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='N
     print(f1 + ' ' + f1STD)
 
 
+def processAttHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
+    resultName = 'result/J-Att-HistPOSTLSTM_' + modelName + '_' + balancedWeight
+    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
+    poss_train, poss_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, \
+    histDayVectors_val, histHourVectors_train, histHourVectors_val, histPOSVectors_train, histPOSVectors_val, posVocabSize, embMatrix, word_index = loadHistData(
+        modelName, histName, char, embedding, histNum=histNum, pos=True, dev=dev)
+
+    labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
+    encoder = LabelEncoder()
+    encoder.fit(np.concatenate([labels_train, labels_val]))
+    labels_train = encoder.transform(labels_train)
+    labels_val = encoder.transform(labels_val)
+    labelList = encoder.classes_.tolist()
+    print('Labels: ' + str(labelList))
+    labelFile = open(resultName + '.label', 'a')
+    labelFile.write(str(labelList) + '\n')
+    labelFile.close()
+
+    days_train = to_categorical(days_train, num_classes=7)
+    hours_train = to_categorical(hours_train, num_classes=4)
+    days_val = to_categorical(days_val, num_classes=7)
+    hours_val = to_categorical(hours_val, num_classes=4)
+
+    for i in range(histNum):
+        histDayVectors_train[i] = to_categorical(histDayVectors_train[i], num_classes=7)
+        histHourVectors_train[i] = to_categorical(histHourVectors_train[i], num_classes=4)
+        histDayVectors_val[i] = to_categorical(histDayVectors_val[i], num_classes=7)
+        histHourVectors_val[i] = to_categorical(histHourVectors_val[i], num_classes=4)
+
+    # training
+    if dev:
+        verbose = 2
+    else:
+        verbose = 0
+    print('training...')
+    eval = evaluation.evalMetrics(labelNum)
+
+    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    if embedding in ['glove', 'word2vec']:
+        shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
+        embedding_tweet = shared_embedding(input_tweet)
+    else:
+        shared_embedding = Embedding(vocabSize, embeddingVectorLength)
+        embedding_tweet = shared_embedding(input_tweet)
+    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2,return_sequences=True)(embedding_tweet)
+    tweet_self_attention = SeqSelfAttention(attention_activation='sigmoid')(tweet_lstm)
+    tweet_last_timestep = Lambda(lambda x: x[:, -1, :])(tweet_self_attention)
+
+    input_pos = Input(batch_shape=(batch_size, posEmbLength,), name='pos_input')
+    shared_embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)
+    embedding_pos = shared_embedding_pos(input_pos)
+    pos_lstm = LSTM(20, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_pos)
+    pos_self_attention = SeqSelfAttention(attention_activation='sigmoid')(pos_lstm)
+    pos_last_timestep = Lambda(lambda x: x[:, -1, :])(pos_self_attention)
+
+    input_day = Input(batch_shape=(batch_size, 7,), name='day_input')
+    shared_day_embedding = Embedding(20, 1)
+    day_embedding = shared_day_embedding(input_day)
+    day = Flatten()(day_embedding)
+    input_hour = Input(batch_shape=(batch_size, 4,), name='hour_input')
+    shared_hour_embedding = Embedding(20, 1)
+    hour_embedding = shared_hour_embedding(input_hour)
+    hour = Flatten()(hour_embedding)
+
+    comb = [tweet_last_timestep, pos_last_timestep, day, hour]
+    inputList = [input_tweet, input_pos, input_day, input_hour]
+    for i in range(histNum):
+        input_hist = Input(batch_shape=(batch_size, tweetLength,), name='hist_tweet_input_'+str(i))
+        embedding_hist = shared_embedding(input_hist)
+        hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_hist)
+        hist_self_attention = SeqSelfAttention(attention_activation='sigmoid')(hist_lstm)
+        hist_last_timestep = Lambda(lambda x: x[:, -1, :])(hist_self_attention)
+
+        input_pos = Input(batch_shape=(batch_size, posEmbLength,), name='pos_tweet_input_'+str(i))
+        embedding_pos = shared_embedding_pos(input_pos)
+        histpos_lstm = LSTM(20, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_pos)
+        histpos_self_attention = SeqSelfAttention(attention_activation='sigmoid')(histpos_lstm)
+        histpos_last_timestep = Lambda(lambda x: x[:, -1, :])(histpos_self_attention)
+
+        input_day = Input(batch_shape=(batch_size, 7,), name='day_tweet_input_'+str(i))
+        input_hour = Input(batch_shape=(batch_size, 4,), name='hour_tweet_input_'+str(i))
+        day_embedding = shared_day_embedding(input_day)
+        hour_embedding = shared_hour_embedding(input_hour)
+        day = Flatten()(day_embedding)
+        hour = Flatten()(hour_embedding)
+
+        comb += [hist_last_timestep, histpos_last_timestep, day, hour]
+        inputList += [input_hist, input_pos, input_day, input_hour]
+
+    comb = concatenate(comb)
+    output = Dense(labelNum, activation='softmax', name='output')(comb)
+    model = Model(inputs=inputList, outputs=output)
+    #print(model.summary())
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    if len(labels_train) % batch_size != 0:
+        tweetVector_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+        labels_train = labels_train[:-(len(labels_train) % batch_size)]
+        days_train = days_train[:-(len(days_train) % batch_size)]
+        hours_train = hours_train[:-(len(hours_train) % batch_size)]
+        posVector_train = posVector_train[:-(len(posVector_train) % batch_size)]
+        for i in range(histNum):
+            histTweetVectors_train[i] = histTweetVectors_train[i][:-(len(histTweetVectors_train[i]) % batch_size)]
+            histDayVectors_train[i] = histDayVectors_train[i][:-(len(histDayVectors_train[i]) % batch_size)]
+            histHourVectors_train[i] = histHourVectors_train[i][:-(len(histHourVectors_train[i]) % batch_size)]
+            histPOSVectors_train[i] = histPOSVectors_train[i][:-(len(histPOSVectors_train[i]) % batch_size)]
+    if len(labels_val) % batch_size != 0:
+        tweetVector_val = tweetVector_val[:-(len(tweetVector_val) % batch_size)]
+        labels_val = labels_val[:-(len(labels_val) % batch_size)]
+        days_val = days_val[:-(len(days_val) % batch_size)]
+        hours_val = hours_val[:-(len(hours_val) % batch_size)]
+        posVector_val = posVector_val[:-(len(posVector_val) % batch_size)]
+        for i in range(histNum):
+            histTweetVectors_val[i] = histTweetVectors_val[i][:-(len(histTweetVectors_val[i]) % batch_size)]
+            histDayVectors_val[i] = histDayVectors_val[i][:-(len(histDayVectors_val[i]) % batch_size)]
+            histHourVectors_val[i] = histHourVectors_val[i][:-(len(histHourVectors_val[i]) % batch_size)]
+            histPOSVectors_val[i] = histPOSVectors_val[i][:-(len(histPOSVectors_val[i]) % batch_size)]
+
+    labelVector_train = np_utils.to_categorical(labels_train)
+    labelVector_val = np_utils.to_categorical(labels_val)
+
+    dataVector_train = [tweetVector_train, posVector_train, days_train, hours_train]
+    dataVector_val = [tweetVector_val, posVector_val, days_val, hours_val]
+
+    for i in range(histNum):
+        dataVector_train += [histTweetVectors_train[i], histPOSVectors_train[i], histDayVectors_train[i], histHourVectors_train[i]]
+        dataVector_val += [histTweetVectors_val[i], histPOSVectors_val[i], histDayVectors_val[i], histHourVectors_val[i]]
+
+    if balancedWeight == 'sample':
+        sampleWeight = compute_sample_weight('balanced', labels_train)
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
+    elif balancedWeight == 'class':
+        classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, validation_data=(dataVector_val, labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+    else:
+        trainHistory = model.fit(dataVector_train, labelVector_train, epochs=epochs, validation_data=(dataVector_val, labelVector_val), batch_size=batch_size,
+                  verbose=verbose)
+
+    accuracyHist = trainHistory.history['val_acc']
+    lossHist = trainHistory.history['val_loss']
+
+    tuneFile = open(resultName + '.tune', 'a')
+    tuneFile.write('Hist Num: ' + str(histNum) + '\n')
+    for index, loss in enumerate(lossHist):
+        tuneFile.write(str(index + 1) + '\t' + str(loss) + '\t' + str(accuracyHist[index]) + '\n')
+    tuneFile.write('\n')
+    tuneFile.close()
+
+    scores = model.evaluate(dataVector_val, labelVector_val, batch_size=batch_size, verbose=0)
+    print("Accuracy: %.2f%%" % (scores[1] * 100))
+
+    predictions = model.predict(dataVector_val, batch_size=batch_size)
+    sampleFile = open(resultName + '.sample', 'a')
+    predLabels = []
+    trueLabel_val = encoder.inverse_transform(labels_val)
+    for index, pred in enumerate(predictions):
+        predLabel = labelList[pred.tolist().index(max(pred))]
+        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        predLabels.append(predLabel)
+    sampleFile.close()
+    eval.addEval(scores[1], trueLabel_val, predLabels)
+
+    score, scoreSTD = eval.getScore()
+    precision, preSTD = eval.getPrecision()
+    recall, recSTD = eval.getRecall()
+    f1, f1STD = eval.getF1()
+    conMatrix = eval.getConMatrix()
+    resultFile = open(resultName + '.result', 'a')
+    confusionFile = open(resultName + '.confMatrix', 'a')
+    for row in conMatrix:
+        lineOut = ''
+        for line in row:
+            lineOut += str(line) + '\t'
+        confusionFile.write(lineOut.strip() + '\n')
+    confusionFile.write('\n')
+    resultFile.write(score + '\t' + scoreSTD + '\n')
+    resultFile.write(recall + '\t' + recSTD + '\n')
+    resultFile.write(precision + '\t' + preSTD + '\n')
+    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    confusionFile.close()
+    resultFile.close()
+    print(score + ' ' + scoreSTD)
+    print(recall + ' ' + recSTD)
+    print(precision + ' ' + preSTD)
+    print(f1 + ' ' + f1STD)
+
 
 if __name__ == "__main__":
     modelName = 'long1.5'
     histName = 'long1.5'
     embModel = 'glove'
     #processTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
-    processTLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
+    #processTLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
 
     #processPOSLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
     #processPOSLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
 
     #processPOSTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
     #processPOSTLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
+    processAttPOSTLSTM(modelName, 'class', embModel, char=False, epochs=4, dev=False)
 
     #processHistLSTM(modelName, histName, 'none', 'glove', char=False, histNum=histNum, epochs=20, dev=True)
     #processHistLSTM(modelName, histName, 'class', 'glove', char=False, histNum=5, epochs=9, dev=True)
+    processAttHistLSTM(modelName, histName, 'class', 'glove', char=False, histNum=5, epochs=26, dev=False)
 
-    #processHistPOSTLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=18, dev=False)
+    #processAttHistPOSTLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=13, dev=False)
 
     #for num in [3]:
     #    processHistLSTM_period('long1.5', 'class', 'glove', periodNum=num, epochs=12, tune=False)
