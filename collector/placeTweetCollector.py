@@ -3,18 +3,15 @@ import time
 import json
 import twitter
 import os
+import properties
 
-c_k = 'R2FZHZcAcHFatakYhKL2cQcVo'
-c_s = 'jwkcIPCkrOBdxKVTVVE7d7cIwH8ZyHHtqxYeCVUZs35Lu4BOkY'
-a_t = '141612471-3UJPl93cGf2XBm2JkBn26VFewzwK3WGN1EiKJi4T'
-a_t_s = 'do1I1vtIvjgQF3vr0ln4pYVbsAj5OZIxuuATXjgBaqUYM'
 
 def oauth_login():
     # credentials for OAuth
-    CONSUMER_KEY = c_k
-    CONSUMER_SECRET = c_s
-    OAUTH_TOKEN = a_t
-    OAUTH_TOKEN_SECRET = a_t_s
+    CONSUMER_KEY = properties.twitter_cred['c_k']
+    CONSUMER_SECRET = properties.twitter_cred['c_s']
+    OAUTH_TOKEN = properties.twitter_cred['a_t']
+    OAUTH_TOKEN_SECRET = properties.twitter_cred['a_t_s']
     # Creating the authentification
     auth = twitter.oauth.OAuth(OAUTH_TOKEN,
                                OAUTH_TOKEN_SECRET,

@@ -17,3 +17,4 @@ samples/*
 samples_full/*
 samples_hist/*
 oldData/*
+collector/properties.py

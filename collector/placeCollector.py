@@ -3,19 +3,15 @@ import time
 import json
 import twitter
 import requests
-
-c_k = 'R2FZHZcAcHFatakYhKL2cQcVo'
-c_s = 'jwkcIPCkrOBdxKVTVVE7d7cIwH8ZyHHtqxYeCVUZs35Lu4BOkY'
-a_t = '141612471-3UJPl93cGf2XBm2JkBn26VFewzwK3WGN1EiKJi4T'
-a_t_s = 'do1I1vtIvjgQF3vr0ln4pYVbsAj5OZIxuuATXjgBaqUYM'
+import properties
 
 
 def oauth_login():
     # credentials for OAuth
-    CONSUMER_KEY = c_k
-    CONSUMER_SECRET = c_s
-    OAUTH_TOKEN = a_t
-    OAUTH_TOKEN_SECRET = a_t_s
+    CONSUMER_KEY = properties.twitter_cred['c_k']
+    CONSUMER_SECRET = properties.twitter_cred['c_s']
+    OAUTH_TOKEN = properties.twitter_cred['a_t']
+    OAUTH_TOKEN_SECRET = properties.twitter_cred['a_t_s']
     # Creating the authentification
     auth = twitter.oauth.OAuth(OAUTH_TOKEN,
                                OAUTH_TOKEN_SECRET,
@@ -69,7 +65,7 @@ def TomTomPlaceCollector():
     for line in listFile:
         placeList.append(line.strip().replace(' ', '+'))
     listFile.close()
-    key = 'cx4etag3te8k2d8bss6fy6bd'
+    key = properties.tomtom_cred['key']
 
     placeIDSet = set()
     recordFile = open('tomtom_category_places.json', 'a')

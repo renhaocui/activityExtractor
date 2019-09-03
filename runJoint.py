@@ -681,7 +681,7 @@ def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
 
     output = Dense(labelNum, activation='softmax', name='output')(comb)
     model = Model(inputs=[input_tweet, input_day, input_hour, input_pos], outputs=output)
-    #print model.summary()
+    print model.summary()
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     if len(labels_train) % batch_size != 0:
@@ -1756,19 +1756,19 @@ if __name__ == "__main__":
     modelName = 'long1.5'
     histName = 'long1.5'
     embModel = 'glove'
-    #processTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
+    processTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
     #processTLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
 
     #processPOSLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
     #processPOSLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
 
-    #processPOSTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
+    processPOSTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
     #processPOSTLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
-    processAttPOSTLSTM(modelName, 'class', embModel, char=False, epochs=4, dev=False)
+    #processAttPOSTLSTM(modelName, 'class', embModel, char=False, epochs=4, dev=False)
 
     #processHistLSTM(modelName, histName, 'none', 'glove', char=False, histNum=histNum, epochs=20, dev=True)
     #processHistLSTM(modelName, histName, 'class', 'glove', char=False, histNum=5, epochs=9, dev=True)
-    processAttHistLSTM(modelName, histName, 'class', 'glove', char=False, histNum=5, epochs=26, dev=False)
+    #processAttHistLSTM(modelName, histName, 'class', 'glove', char=False, histNum=5, epochs=26, dev=False)
 
     #processAttHistPOSTLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=13, dev=False)
 

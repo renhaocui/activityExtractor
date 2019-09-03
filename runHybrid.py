@@ -908,5 +908,5 @@ if __name__ == "__main__":
         #processHistLSTM_contextPOS(modelName, histName, 'class', 'glove', char=False, histNum=histNum, epochs=10, dev=False)
 
         #processHistLSTM_contextPOST(modelName, histName, 'none', 'glove', char=False, histNum=histNum, epochs=9, dev=False)
-        processHistLSTM_contextPOST(modelName, histName, 'class', 'glove', char=False, histNum=histNum, epochs=23, dev=False)
-        #processHistAttLSTM_contextPOST(modelName, histName, 'class', 'glove', char=False, histNum=histNum, epochs=14, dev=False)
+        #processHistLSTM_contextPOST(modelName, histName, 'class', 'glove', char=False, histNum=histNum, epochs=23, dev=False)
+        processHistAttLSTM_contextPOST(modelName, histName, 'class', 'glove', char=False, histNum=histNum, epochs=14, dev=False)

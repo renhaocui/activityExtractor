@@ -2,19 +2,15 @@ import time
 __author__ = 'renhao.cui'
 import json
 import twitter
-
-c_k = 'wHqszw01omK3W7sNwZC2XgY2e'
-c_s = '2Kmt5CFVG8UikLLKNgTUbertPfxOBHSHaqZDdMZ5T6vgP11iD8'
-a_t = '141612471-rtZFDyJrcaLN96FYpTSRyoCyhMcFySLZCTA2VXXF'
-a_t_s = 'zYUlpJTApBhtgnAP1PpypO8TCofZdqIGb9CZO6o5Z8vUA'
+import properties
 
 
 def oauth_login():
     # credentials for OAuth
-    CONSUMER_KEY = c_k
-    CONSUMER_SECRET = c_s
-    OAUTH_TOKEN = a_t
-    OAUTH_TOKEN_SECRET = a_t_s
+    CONSUMER_KEY = properties.twitter_cred2['c_k']
+    CONSUMER_SECRET = properties.twitter_cred2['c_s']
+    OAUTH_TOKEN = properties.twitter_cred2['a_t']
+    OAUTH_TOKEN_SECRET = properties.twitter_cred2['a_t_s']
     # Creating the authentification
     auth = twitter.oauth.OAuth(OAUTH_TOKEN,
                                OAUTH_TOKEN_SECRET,
