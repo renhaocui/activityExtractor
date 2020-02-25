@@ -1,5 +1,6 @@
 import json
 import re
+from datetime import datetime
 
 charLengthLimit = 20
 dayMapper = {'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6, 'Sun': 0}
@@ -62,6 +63,67 @@ def extractPOS(inputList, breakEmoji=True, removeAllMentions=True):
             return contentOutput, posOutput
     else:
         return contentOutput, posOutput
+
+
+def processYelp(dataFilename, posFilename, outputFilename, num=5):
+    idTagMapper = {}
+    posFile = open(posFilename, 'r')
+    for line in posFile:
+        data = json.loads(line.strip())
+        idTagMapper[data['review_id']] = data['tag']
+    posFile.close()
+    print len(idTagMapper)
+    
+    outputFile = open(outputFilename, 'w')
+    dataFile = open(dataFilename, 'r')
+    for line in dataFile:
+        data = json.loads(line.strip())
+        businessData = {'business_id': data['business_id'], 'business_stars': data['business_stars'], 'reviews': []}
+        for reviewData in data['reviews']:
+            contentList, posList = extractPOS(idTagMapper[reviewData['review_id']], breakEmoji=True, removeAllMentions=False)
+            if len(businessData['reviews']) == num:
+                outputFile.write(json.dumps(businessData) + '\n')
+                break
+            else:
+                if len(contentList) > 5:
+                    timeTemp = reviewData['date'].split(' ')
+                    tempReviewData = {'review_id': reviewData['review_id'], 'date': datetime.strptime(timeTemp[0], '%Y-%m-%d').weekday(), 'hour': hourMapper(timeTemp[1].split(':')[0]),'text': list2str(contentList), 'pos': list2str(posList)}
+                    businessData['reviews'].append(tempReviewData)
+    dataFile.close()
+    outputFile.close()
+
+
+def processYelp2(dataFilename, posFilename, outputFilename, num=5):
+    idTagMapper = {}
+    posFile = open(posFilename, 'r')
+    for line in posFile:
+        data = json.loads(line.strip())
+        idTagMapper[data['review_id']] = data['tag']
+    posFile.close()
+    print len(idTagMapper)
+
+    outputCount = 0
+    outputFile = open(outputFilename, 'w')
+    dataFile = open(dataFilename, 'r')
+    for line in dataFile:
+        data = json.loads(line.strip())
+        userReviewData = {'user_id': data['user_id'], 'reviews': []}
+        for reviewData in data['reviews']:
+            contentList, posList = extractPOS(idTagMapper[reviewData['review_id']], breakEmoji=True, removeAllMentions=False)
+            if len(userReviewData['reviews']) == num:
+                sortedReviews = sorted(userReviewData['reviews'], key=lambda k: k['date'])
+                userReviewData['reviews'] = sortedReviews
+                outputFile.write(json.dumps(userReviewData) + '\n')
+                outputCount += 1
+                break
+            else:
+                if len(contentList) > 5:
+                    timeTemp = reviewData['date'].split(' ')
+                    tempReviewData = {'stars': reviewData['stars'], 'review_id': reviewData['review_id'], 'date': reviewData['date'], 'day': datetime.strptime(timeTemp[0], '%Y-%m-%d').weekday(), 'hour': hourMapper(timeTemp[1].split(':')[0]),'text': list2str(contentList), 'pos': list2str(posList)}
+                    userReviewData['reviews'].append(tempReviewData)
+    dataFile.close()
+    outputFile.close()
+    print outputCount
 
 
 def processTweet(modelName, hashtag=False, rules=True):
@@ -229,7 +291,6 @@ def processHist(modelName, histNumMin=1, histNumMax=50):
     print(len(histTweetData))
 
 
-
 def processHist_places(modelName, histNum=5):
     activityList = {}
     activityListFile = open('lists/google_place_activity_' + modelName + '.list', 'r')
@@ -304,5 +365,7 @@ def processHist_places(modelName, histNum=5):
 
 if __name__ == '__main__':
     #processHist('long1.5', histNumMax=50)
-    processHist('long1.5', histNumMin=5, histNumMax=5)
+    #processHist('long1.5', histNumMin=5, histNumMax=5)
     #processTweet('long1.5', hashtag=True)
+    #processYelp('data/yelpData.json', 'data/yelpContent.pos', 'data/consolidateData_yelp.json', num=5)
+    processYelp2('data/yelp/yelpUserReviewData.json', 'data/yelp/yelpUserReview.pos.json', 'data/yelp/consolidateData_yelpUserReview.json', num=6)

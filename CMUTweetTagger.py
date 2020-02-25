@@ -68,6 +68,7 @@ def runtagger_parse(tweets, run_tagger_cmd=RUN_TAGGER_CMD):
         pos_result.append([x for x in _split_results(pos_raw_result)])
     return pos_result
 
+
 def combineContents(inputLists):
     contentOutput = []
     for inputList in inputLists:
@@ -81,6 +82,45 @@ def combineContents(inputLists):
 def sortTweetbyID(inputList, num=6):
     sorted_list = sorted(inputList, key=lambda k: k['id'], reverse=True)
     return sorted_list[:num]
+
+
+def processYelpData(dataFilename, outputFilename):
+    contents = []
+    review_ids = []
+    dataFile = open(dataFilename, 'r')
+    for line in dataFile:
+        item = json.loads(line.strip())
+        for review in item['reviews']:
+            review_ids.append(review['review_id'])
+            contents.append(review['text'])
+    dataFile.close()
+    print len(contents)
+    print len(review_ids)
+
+    contentFile = open('data/yelpData.content', 'w')
+    for content in contents:
+        contentFile.write(content+'\n')
+    contentFile.close()
+
+    idFile = open('data/yelpData.id', 'w')
+    for id in review_ids:
+        idFile.write(str(id)+'\n')
+    idFile.close()
+
+    output = runtagger_parse(contents)
+    outputFile = open('data/yelpData.pos', 'w')
+    for item in output:
+        outputFile.write(json.dumps(item)+'\n')
+    outputFile.close()
+    print len(output)
+
+    if len(contents) != len(output):
+        print('output length different from input length')
+    else:
+        outFile = open(outputFilename, 'w')
+        for index, out in enumerate(output):
+            outFile.write(json.dumps({'review_id': review_ids[index], 'tag': out}) + '\n')
+        outFile.close()
 
 
 def processTweetTag(hashtag=True):
@@ -276,6 +316,7 @@ def processUserTweetTag(fileName, hashtag=True):
 
 
 if __name__ == "__main__":
-    processTweetTag(hashtag=True)
+    #processTweetTag(hashtag=True)
+    processYelpData('data/yelpUserReviewData.json', 'data/yelpUserReview.pos.json')
     #processHistTag(hashtag=False, maxHistNum=50)
     #processUserTweetTag('lists/popularAccount4.list', hashtag=False)

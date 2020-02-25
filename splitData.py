@@ -14,30 +14,38 @@ def split(modelName, extractIndex):
     expFile.close()
 
 
-def divide(modelName):
-    dataFile = open('data/consolidateData_' + modelName + '.json', 'r')
+def divide(filename, dev=True):
+    dataFile = open(filename, 'r')
     data = []
     for line in dataFile:
         data.append(line)
     dataFile.close()
 
     random.shuffle(data)
-    trainFile = open('data/consolidateData_' + modelName + '_train.json', 'w')
-    devFile = open('data/consolidateData_' + modelName + '_dev.json', 'w')
-    testFile = open('data/consolidateData_' + modelName + '_test.json', 'w')
+    trainFile = open(filename[:-5] + '_train.json', 'w')
+    if dev:
+        devFile = open(filename[:-5] + '_dev.json', 'w')
+    testFile = open(filename[:-5] + '_test.json', 'w')
     for index, line in enumerate(data):
-        if index % 5 == 0:
-            devFile.write(line)
-        elif index % 5 == 1:
-            testFile.write(line)
+        if dev:
+            if index % 5 == 0:
+                devFile.write(line)
+            elif index % 5 == 1:
+                testFile.write(line)
+            else:
+                trainFile.write(line)
         else:
-            trainFile.write(line)
+            if index % 5 == 0:
+                testFile.write(line)
+            else:
+                trainFile.write(line)
     trainFile.close()
-    devFile.close()
+    if dev:
+        devFile.close()
     testFile.close()
 
 
 
 if __name__ == '__main__':
     #split('long1.5', 4)
-    divide('long1.5')
+    divide('data/yelp/consolidateData_yelpUserReview.json', dev=False)

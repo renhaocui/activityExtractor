@@ -28,5 +28,6 @@ def POStagger(input):
             wordTag = {}
     return outputTags
 
+
 print POStagger('data/casual.txt')
 print POStagger(['This is a test!', 'test tweet #justfortest', 'hello world! yep'])

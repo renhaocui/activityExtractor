@@ -1,6 +1,6 @@
 import json, re, time, datetime, sys
 import numpy as np
-from keras.layers import Dense, LSTM, Input, concatenate, Flatten, Lambda
+from keras.layers import Dense, LSTM, Input, concatenate, Flatten, Lambda, GRU
 from keras.layers.embeddings import Embedding
 from keras.models import Model
 from keras.preprocessing import sequence
@@ -20,7 +20,7 @@ load()
 
 vocabSize = 10000
 tweetLength = 25
-posEmbLength = 25
+yelpLength = 100
 embeddingVectorLength = 200
 embeddingPOSVectorLength = 20
 charLengthLimit = 20
@@ -107,8 +107,103 @@ def extractPOS(inputList, mode='all', breakEmoji=True):
     return contentOutput.lower().strip().encode('utf-8'), posOutput.strip().encode('utf-8')
 
 
+def loadYelpData(modelName, char, embedding, pos=False):
+    print('Loading...')
+    textLength = yelpLength
+    contents_train = []
+    contents_val = []
+    labels_train = []
+    labels_val = []
+    days_train = []
+    days_val = []
+    hours_train = []
+    hours_val = []
+    poss_train = []
+    poss_val = []
+    ids_train = []
+    ids_val = []
+    trainFile = open('data/yelp/consolidateData_'+modelName+'_train.json', 'r')
+    valFile = open('data/yelp/consolidateData_'+modelName+'_test.json', 'r')
+
+    for line in trainFile:
+        data = json.loads(line.strip())
+        histLen = len(data['reviews'])
+        contents_train.append(data['reviews'][histLen-1]['text'].lower().encode('utf-8'))
+        labels_train.append(data['reviews'][histLen-1]['stars'])
+        days_train.append(data['reviews'][histLen-1]['day'])
+        hours_train.append(data['reviews'][histLen-1]['hour'])
+        poss_train.append(data['reviews'][histLen-1]['pos'].encode('utf-8'))
+        ids_train.append(str(data['reviews'][histLen-1]['review_id']))
+    ids_train = np.array(ids_train)
+    labels_train = np.array(labels_train)
+
+    for line in valFile:
+        data = json.loads(line.strip())
+        histLen = len(data['reviews'])
+        contents_val.append(data['reviews'][histLen-1]['text'].lower().encode('utf-8'))
+        labels_val.append(data['reviews'][histLen-1]['stars'])
+        days_val.append(data['reviews'][histLen-1]['day'])
+        hours_val.append(data['reviews'][histLen-1]['hour'])
+        poss_val.append(data['reviews'][histLen-1]['pos'].encode('utf-8'))
+        ids_val.append(str(data['reviews'][histLen-1]['review_id']))
+    ids_val = np.array(ids_val)
+    labels_val = np.array(labels_val)
+
+    if char:
+        tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
+    else:
+        tk = Tokenizer(num_words=vocabSize, char_level=char)
+    tk.fit_on_texts(contents_train + contents_val)
+    textSequences_train = tk.texts_to_sequences(contents_train)
+    textVector_train = sequence.pad_sequences(textSequences_train, maxlen=textLength, truncating='post', padding='post')
+    textSequences_val = tk.texts_to_sequences(contents_val)
+    textVector_val = sequence.pad_sequences(textSequences_val, maxlen=textLength, truncating='post', padding='post')
+
+    if embedding == 'glove':
+        embeddings_index = {}
+        embFile = open('../tweetEmbeddingData/glove.6B.200d.txt', 'r')
+        for line in embFile:
+            values = line.split()
+            word = values[0]
+            coefs = np.asarray(values[1:], dtype='float32')
+            embeddings_index[word] = coefs
+        embFile.close()
+        print('Found %s word vectors.' % len(embeddings_index))
+        word_index = tk.word_index
+        embMatrix = np.zeros((len(word_index) + 1, 200))
+        for word, i in word_index.items():
+            embVector = embeddings_index.get(word)
+            if embVector is not None:
+                embMatrix[i] = embVector
+    elif embedding == 'word2vec':
+        word_index = tk.word_index
+        w2v = word2vecReader.Word2Vec()
+        embModel = w2v.loadModel()
+        embMatrix = np.zeros((len(word_index) + 1, 400))
+        for word, i in word_index.items():
+            if word in embModel:
+                embMatrix[i] = embModel[word]
+    else:
+        embMatrix = None
+        word_index = None
+
+    if not pos:
+        return ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, textVector_train, textVector_val, embMatrix, word_index
+    else:
+        posVocabSize = 25
+        tkPOS = Tokenizer(num_words=posVocabSize, filters='', lower=False)
+        tkPOS.fit_on_texts(poss_train + poss_val)
+        posSequences_train = tkPOS.texts_to_sequences(poss_train)
+        posVector_train = sequence.pad_sequences(posSequences_train, maxlen=textLength, truncating='post', padding='post')
+        posSequences_val = tkPOS.texts_to_sequences(poss_val)
+        posVector_val = sequence.pad_sequences(posSequences_val, maxlen=textLength, truncating='post', padding='post')
+
+        return ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, poss_train, poss_val, textVector_train, textVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index
+
+
 def loadData(modelName, char, embedding, pos=False, dev=False):
     print('Loading...')
+    textLength = tweetLength
     contents_train = []
     contents_val = []
     labels_train = []
@@ -131,7 +226,7 @@ def loadData(modelName, char, embedding, pos=False, dev=False):
 
     for line in trainFile:
         data = json.loads(line.strip())
-        contents_train.append(data['content'].encode('utf-8'))
+        contents_train.append(data['content'].lower().encode('utf-8'))
         labels_train.append(data['label'])
         places_train.append(data['place'])
         days_train.append(data['day'])
@@ -144,7 +239,7 @@ def loadData(modelName, char, embedding, pos=False, dev=False):
 
     for line in valFile:
         data = json.loads(line.strip())
-        contents_val.append(data['content'].encode('utf-8'))
+        contents_val.append(data['content'].lower().encode('utf-8'))
         labels_val.append(data['label'])
         places_val.append(data['place'])
         days_val.append(data['day'])
@@ -161,9 +256,9 @@ def loadData(modelName, char, embedding, pos=False, dev=False):
         tk = Tokenizer(num_words=vocabSize, char_level=char)
     tk.fit_on_texts(contents_train + contents_val)
     tweetSequences_train = tk.texts_to_sequences(contents_train)
-    tweetVector_train = sequence.pad_sequences(tweetSequences_train, maxlen=tweetLength, truncating='post', padding='post')
+    tweetVector_train = sequence.pad_sequences(tweetSequences_train, maxlen=textLength, truncating='post', padding='post')
     tweetSequences_val = tk.texts_to_sequences(contents_val)
-    tweetVector_val = sequence.pad_sequences(tweetSequences_val, maxlen=tweetLength, truncating='post', padding='post')
+    tweetVector_val = sequence.pad_sequences(tweetSequences_val, maxlen=textLength, truncating='post', padding='post')
 
     if embedding == 'glove':
         embeddings_index = {}
@@ -200,15 +295,178 @@ def loadData(modelName, char, embedding, pos=False, dev=False):
         tkPOS = Tokenizer(num_words=posVocabSize, filters='', lower=False)
         tkPOS.fit_on_texts(poss_train + poss_val)
         posSequences_train = tkPOS.texts_to_sequences(poss_train)
-        posVector_train = sequence.pad_sequences(posSequences_train, maxlen=tweetLength, truncating='post', padding='post')
+        posVector_train = sequence.pad_sequences(posSequences_train, maxlen=textLength, truncating='post', padding='post')
         posSequences_val = tkPOS.texts_to_sequences(poss_val)
-        posVector_val = sequence.pad_sequences(posSequences_val, maxlen=tweetLength, truncating='post', padding='post')
+        posVector_val = sequence.pad_sequences(posSequences_val, maxlen=textLength, truncating='post', padding='post')
 
         return ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, poss_train, poss_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index
 
 
+def loadYelpHistData(modelName, char, embedding, histNum=5, pos=False):
+    print('Loading...')
+    textLength = yelpLength
+    histContents_train = {}
+    histDayVectors_train = {}
+    histHourVectors_train = {}
+    histPOSLists_train = {}
+    histContents_val = {}
+    histDayVectors_val = {}
+    histHourVectors_val = {}
+    histPOSLists_val = {}
+    for i in range(histNum):
+        histContents_train[i] = []
+        histDayVectors_train[i] = []
+        histHourVectors_train[i] = []
+        histPOSLists_train[i] = []
+        histContents_val[i] = []
+        histDayVectors_val[i] = []
+        histHourVectors_val[i] = []
+        histPOSLists_val[i] = []
+
+    contents_train = []
+    contents_val = []
+    labels_train = []
+    labels_val = []
+    days_train = []
+    days_val = []
+    hours_train = []
+    hours_val = []
+    poss_train = []
+    poss_val = []
+    ids_train = []
+    ids_val = []
+    trainFile = open('data/yelp/consolidateData_' + modelName + '_train.json', 'r')
+    valFile = open('data/yelp/consolidateData_' + modelName + '_test.json', 'r')
+
+    for line in trainFile:
+        data = json.loads(line.strip())
+        histLen = len(data['reviews'])
+        contents_train.append(data['reviews'][histLen-1]['text'].lower().encode('utf-8'))
+        labels_train.append(data['reviews'][histLen-1]['stars'])
+        ids_train.append(str(data['reviews'][histLen-1]['review_id']))
+        days_train.append(data['reviews'][histLen-1]['day'])
+        hours_train.append(data['reviews'][histLen-1]['hour'])
+        poss_train.append(data['reviews'][histLen-1]['pos'].encode('utf-8'))
+        for i in range(histNum):
+            histContents_train[i].append(data['reviews'][i]['text'].lower().encode('utf-8'))
+            histPOSLists_train[i].append(data['reviews'][i]['pos'].encode('utf-8'))
+            histDayVectors_train[i].append(data['reviews'][i]['day'])
+            histHourVectors_train[i].append(data['reviews'][i]['hour'])
+
+    for i in range(histNum):
+        histDayVectors_train[i] = np.array(histDayVectors_train[i])
+        histHourVectors_train[i] = np.array(histHourVectors_train[i])
+    days_train = np.array(days_train)
+    hours_train = np.array(hours_train)
+    ids_train = np.array(ids_train)
+
+    for line in valFile:
+        data = json.loads(line.strip())
+        histLen = len(data['reviews'])
+        contents_val.append(data['reviews'][histLen - 1]['text'].lower().encode('utf-8'))
+        labels_val.append(data['reviews'][histLen - 1]['stars'])
+        ids_val.append(str(data['reviews'][histLen - 1]['review_id']))
+        days_val.append(data['reviews'][histLen - 1]['day'])
+        hours_val.append(data['reviews'][histLen - 1]['hour'])
+        poss_val.append(data['reviews'][histLen - 1]['pos'].encode('utf-8'))
+        for i in range(histNum):
+            histContents_val[i].append(data['reviews'][i]['text'].lower().encode('utf-8'))
+            histPOSLists_val[i].append(data['reviews'][i]['pos'].encode('utf-8'))
+            histDayVectors_val[i].append(data['reviews'][i]['day'])
+            histHourVectors_val[i].append(data['reviews'][i]['hour'])
+
+    for i in range(histNum):
+        histDayVectors_val[i] = np.array(histDayVectors_val[i])
+        histHourVectors_val[i] = np.array(histHourVectors_val[i])
+    days_val = np.array(days_val)
+    hours_val = np.array(hours_val)
+    ids_val = np.array(ids_val)
+
+    if char:
+        tk = Tokenizer(num_words=vocabSize, char_level=char, filters='')
+    else:
+        tk = Tokenizer(num_words=vocabSize, char_level=char)
+
+    totalList = contents_train + contents_val
+    for i in range(histNum):
+        totalList += histContents_train[i]
+        totalList += histContents_val[i]
+    tk.fit_on_texts(totalList)
+    textSequences_train = tk.texts_to_sequences(contents_train)
+    textVector_train = sequence.pad_sequences(textSequences_train, maxlen=textLength, truncating='post', padding='post')
+    textSequences_val = tk.texts_to_sequences(contents_val)
+    textVector_val = sequence.pad_sequences(textSequences_val, maxlen=textLength, truncating='post', padding='post')
+
+    histTextVectors_train = []
+    histTextVectors_val = []
+    for i in range(histNum):
+        histSequence_train = tk.texts_to_sequences(histContents_train[i])
+        tempVector_train = sequence.pad_sequences(histSequence_train, maxlen=textLength, truncating='post', padding='post')
+        histTextVectors_train.append(tempVector_train)
+        histSequence_val = tk.texts_to_sequences(histContents_val[i])
+        tempVector_val = sequence.pad_sequences(histSequence_val, maxlen=textLength, truncating='post', padding='post')
+        histTextVectors_val.append(tempVector_val)
+
+    if embedding == 'glove':
+        embeddings_index = {}
+        embFile = open('../tweetEmbeddingData/glove.6B.200d.txt', 'r')
+        for line in embFile:
+            values = line.split()
+            word = values[0]
+            coefs = np.asarray(values[1:], dtype='float32')
+            embeddings_index[word] = coefs
+        embFile.close()
+        print('Found %s word vectors.' % len(embeddings_index))
+        word_index = tk.word_index
+        embMatrix = np.zeros((len(word_index) + 1, 200))
+        for word, i in word_index.items():
+            embVector = embeddings_index.get(word)
+            if embVector is not None:
+                embMatrix[i] = embVector
+    elif embedding == 'word2vec':
+        word_index = tk.word_index
+        w2v = word2vecReader.Word2Vec()
+        embModel = w2v.loadModel()
+        embMatrix = np.zeros((len(word_index) + 1, 400))
+        for word, i in word_index.items():
+            if word in embModel:
+                embMatrix[i] = embModel[word]
+    else:
+        embMatrix = None
+        word_index = None
+
+    if not pos:
+        return ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, textVector_train, textVector_val, histTextVectors_train, histTextVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, embMatrix, word_index
+    else:
+        posVocabSize = 25
+        tkPOS = Tokenizer(num_words=posVocabSize, filters='', lower=False)
+        totalPOSList = poss_train + poss_val
+        for i in range(histNum):
+            totalPOSList += histPOSLists_train[i]
+            totalPOSList += histPOSLists_val[i]
+        tkPOS.fit_on_texts(totalPOSList)
+
+        posSequences_train = tkPOS.texts_to_sequences(poss_train)
+        posVector_train = sequence.pad_sequences(posSequences_train, maxlen=textLength, truncating='post', padding='post')
+        posSequences_val = tkPOS.texts_to_sequences(poss_val)
+        posVector_val = sequence.pad_sequences(posSequences_val, maxlen=textLength, truncating='post', padding='post')
+
+        histPOSVectors_train = []
+        histPOSVectors_val = []
+        for i in range(histNum):
+            histPOSSequences_train = tkPOS.texts_to_sequences(histPOSLists_train[i])
+            histPOSVector_train = sequence.pad_sequences(histPOSSequences_train, maxlen=textLength, truncating='post', padding='post')
+            histPOSVectors_train.append(histPOSVector_train)
+            histPOSSequences_val = tkPOS.texts_to_sequences(histPOSLists_val[i])
+            histPOSVector_val = sequence.pad_sequences(histPOSSequences_val, maxlen=textLength, truncating='post', padding='post')
+            histPOSVectors_val.append(histPOSVector_val)
+
+        return ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, poss_train, poss_val, textVector_train, textVector_val, posVector_train, posVector_val, histTextVectors_train, histTextVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, histPOSVectors_train, histPOSVectors_val, posVocabSize, embMatrix, word_index
+
+
 def loadHistData(modelName, histName, char, embedding, histNum=5, pos=False, dev=False):
     print('Loading...')
+    textLength = tweetLength
     histData = {}
     histFile = open('data/consolidateHistData_' + histName + '.json', 'r')
     for line in histFile:
@@ -317,18 +575,18 @@ def loadHistData(modelName, histName, char, embedding, histNum=5, pos=False, dev
         totalList += histContents_val[i]
     tk.fit_on_texts(totalList)
     tweetSequences_train = tk.texts_to_sequences(contents_train)
-    tweetVector_train = sequence.pad_sequences(tweetSequences_train, maxlen=tweetLength, truncating='post', padding='post')
+    tweetVector_train = sequence.pad_sequences(tweetSequences_train, maxlen=textLength, truncating='post', padding='post')
     tweetSequences_val = tk.texts_to_sequences(contents_val)
-    tweetVector_val = sequence.pad_sequences(tweetSequences_val, maxlen=tweetLength, truncating='post', padding='post')
+    tweetVector_val = sequence.pad_sequences(tweetSequences_val, maxlen=textLength, truncating='post', padding='post')
 
     histTweetVectors_train = []
     histTweetVectors_val = []
     for i in range(histNum):
         histSequence_train = tk.texts_to_sequences(histContents_train[i])
-        tempVector_train = sequence.pad_sequences(histSequence_train, maxlen=tweetLength, truncating='post', padding='post')
+        tempVector_train = sequence.pad_sequences(histSequence_train, maxlen=textLength, truncating='post', padding='post')
         histTweetVectors_train.append(tempVector_train)
         histSequence_val = tk.texts_to_sequences(histContents_val[i])
-        tempVector_val = sequence.pad_sequences(histSequence_val, maxlen=tweetLength, truncating='post', padding='post')
+        tempVector_val = sequence.pad_sequences(histSequence_val, maxlen=textLength, truncating='post', padding='post')
         histTweetVectors_val.append(tempVector_val)
 
     if embedding == 'glove':
@@ -371,27 +629,34 @@ def loadHistData(modelName, histName, char, embedding, histNum=5, pos=False, dev
         tkPOS.fit_on_texts(totalPOSList)
 
         posSequences_train = tkPOS.texts_to_sequences(poss_train)
-        posVector_train = sequence.pad_sequences(posSequences_train, maxlen=tweetLength, truncating='post', padding='post')
+        posVector_train = sequence.pad_sequences(posSequences_train, maxlen=textLength, truncating='post', padding='post')
         posSequences_val = tkPOS.texts_to_sequences(poss_val)
-        posVector_val = sequence.pad_sequences(posSequences_val, maxlen=tweetLength, truncating='post', padding='post')
+        posVector_val = sequence.pad_sequences(posSequences_val, maxlen=textLength, truncating='post', padding='post')
 
         histPOSVectors_train = []
         histPOSVectors_val = []
         for i in range(histNum):
             histPOSSequences_train = tkPOS.texts_to_sequences(histPOSLists_train[i])
-            histPOSVector_train = sequence.pad_sequences(histPOSSequences_train, maxlen=tweetLength, truncating='post', padding='post')
+            histPOSVector_train = sequence.pad_sequences(histPOSSequences_train, maxlen=textLength, truncating='post', padding='post')
             histPOSVectors_train.append(histPOSVector_train)
             histPOSSequences_val = tkPOS.texts_to_sequences(histPOSLists_val[i])
-            histPOSVector_val = sequence.pad_sequences(histPOSSequences_val, maxlen=tweetLength, truncating='post', padding='post')
+            histPOSVector_val = sequence.pad_sequences(histPOSSequences_val, maxlen=textLength, truncating='post', padding='post')
             histPOSVectors_val.append(histPOSVector_val)
 
         return ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, poss_train, poss_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, histPOSVectors_train, histPOSVectors_val, posVocabSize, embMatrix, word_index
 
 
-def processTLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
-    resultName = 'result/J-TLSTM_' + modelName + '_' + balancedWeight
-    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, \
-    hourList_train, hourList_val, tweetVector_train, tweetVector_val, embMatrix, word_index = loadData(modelName, char, embedding, pos=False, dev=dev)
+def processTRNN(modelName, RNN='LSTM', balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
+    if RNN == 'LSTM':
+        resultName = 'result/J-T_LSTM_' + modelName + '_' + balancedWeight
+    elif RNN == 'GRU':
+        resultName = 'result/J-T_GRU_' + modelName + '_' + balancedWeight
+    if 'yelp' in modelName:
+        ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, dayList_train, dayList_val, hourList_train, hourList_val, textVector_train, textVector_val, embMatrix, word_index = loadYelpData(modelName, char, embedding, pos=False)
+        textLength = yelpLength
+    else:
+        ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, hourList_train, hourList_val, textVector_train, textVector_val, embMatrix, word_index = loadData(modelName, char, embedding, pos=False, dev=dev)
+        textLength = tweetLength
 
     labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
     dayVector_train = to_categorical(dayList_train, num_classes=7)
@@ -417,12 +682,15 @@ def processTLSTM(modelName, balancedWeight='None', embedding='None', char=False,
         verbose = 0
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_text = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
-        embedding_tweet = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_tweet)
+        embedding_text = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_text)
     else:
-        embedding_tweet = Embedding(vocabSize, embeddingVectorLength)(input_tweet)
-    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
+        embedding_text = Embedding(vocabSize, embeddingVectorLength)(input_text)
+    if RNN == 'LSTM':
+        text_rnn = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_text)
+    elif RNN == 'GRU':
+        text_rnn = GRU(300, dropout=0.2, recurrent_dropout=0.2)(embedding_text)
 
     input_day = Input(batch_shape=(batch_size, 7,))
     #day_dense = Dense(20, activation='relu', name='day')(input_day)
@@ -434,37 +702,38 @@ def processTLSTM(modelName, balancedWeight='None', embedding='None', char=False,
     hour = Flatten()(hour_embedding)
 
     #comb = concatenate([tweet_lstm, hour_dense, day_dense])
-    comb = concatenate([tweet_lstm, hour, day])
+    comb = concatenate([text_rnn, hour, day])
 
     output = Dense(labelNum, activation='softmax', name='output')(comb)
-    model = Model(inputs=[input_tweet, input_hour, input_day], outputs=output)
+    model = Model(inputs=[input_text, input_hour, input_day], outputs=output)
     #print model.summary()
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     if len(labels_train) % batch_size != 0:
-        tweetVector_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+        textVector_train = textVector_train[:-(len(textVector_train) % batch_size)]
         labels_train = labels_train[:-(len(labels_train) % batch_size)]
         hourVector_train = hourVector_train[:-(len(hourVector_train) % batch_size)]
         dayVector_train = dayVector_train[:-(len(dayVector_train) % batch_size)]
     if len(labels_val) % batch_size != 0:
-        tweetVector_val = tweetVector_val[:-(len(tweetVector_val) % batch_size)]
+        textVector_val = textVector_val[:-(len(textVector_val) % batch_size)]
         labels_val = labels_val[:-(len(labels_val) % batch_size)]
         hourVector_val = hourVector_val[:-(len(hourVector_val) % batch_size)]
         dayVector_val = dayVector_val[:-(len(dayVector_val) % batch_size)]
-        places_val = places_val[:-(len(places_val) % batch_size)]
         ids_val = ids_val[:-(len(ids_val) % batch_size)]
+        if 'yelp' not in modelName:
+            places_val = places_val[:-(len(places_val) % batch_size)]
 
     labelVector_train = np_utils.to_categorical(labels_train)
     labelVector_val = np_utils.to_categorical(labels_val)
 
     if balancedWeight == 'sample':
         sampleWeight = compute_sample_weight('balanced', labels_train)
-        trainHistory = model.fit([tweetVector_train, hourVector_train, dayVector_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
+        trainHistory = model.fit([textVector_train, hourVector_train, dayVector_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
     elif balancedWeight == 'class':
         classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-        trainHistory = model.fit([tweetVector_train, hourVector_train, dayVector_train], labelVector_train, validation_data=([tweetVector_val, hourVector_val, dayVector_val], labelVector_val), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+        trainHistory = model.fit([textVector_train, hourVector_train, dayVector_train], labelVector_train, validation_data=([textVector_val, hourVector_val, dayVector_val], labelVector_val), epochs=epochs, batch_size=batch_size, class_weight=classWeight, verbose=verbose)
     else:
-        trainHistory = model.fit([tweetVector_train, hourVector_train, dayVector_train], labelVector_train, validation_data=([tweetVector_val, hourVector_val, dayVector_val], labelVector_val), epochs=epochs, batch_size=batch_size, verbose=verbose)
+        trainHistory = model.fit([textVector_train, hourVector_train, dayVector_train], labelVector_train, validation_data=([textVector_val, hourVector_val, dayVector_val], labelVector_val), epochs=epochs, batch_size=batch_size, verbose=verbose)
 
     accuracyHist = trainHistory.history['val_acc']
     lossHist = trainHistory.history['val_loss']
@@ -475,16 +744,19 @@ def processTLSTM(modelName, balancedWeight='None', embedding='None', char=False,
     tuneFile.write('\n')
     tuneFile.close()
 
-    scores = model.evaluate([tweetVector_val, hourVector_val, dayVector_val], labelVector_val, batch_size=batch_size, verbose=2)
+    scores = model.evaluate([textVector_val, hourVector_val, dayVector_val], labelVector_val, batch_size=batch_size, verbose=2)
     print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-    predictions = model.predict([tweetVector_val, hourVector_val, dayVector_val], batch_size=batch_size)
+    predictions = model.predict([textVector_val, hourVector_val, dayVector_val], batch_size=batch_size)
     sampleFile = open(resultName + '.sample', 'a')
     predLabels = []
     trueLabel_val = encoder.inverse_transform(labels_val)
     for index, pred in enumerate(predictions):
         predLabel = labelList[pred.tolist().index(max(pred))]
-        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        if 'yelp' in modelName:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + str(trueLabel_val[index]) + '\t' + str(predLabel) + '\n')
+        else:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
         predLabels.append(predLabel)
     sampleFile.close()
     eval.addEval(scores[1], trueLabel_val, predLabels)
@@ -502,10 +774,10 @@ def processTLSTM(modelName, balancedWeight='None', embedding='None', char=False,
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
-    resultFile.write(score + '\t' + scoreSTD + '\n')
-    resultFile.write(recall + '\t' + recSTD + '\n')
-    resultFile.write(precision + '\t' + preSTD + '\n')
-    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    resultFile.write(score + '\n')
+    resultFile.write(recall + '\n')
+    resultFile.write(precision + '\n')
+    resultFile.write(f1 + '\n\n')
     confusionFile.close()
     resultFile.close()
     print(score + ' ' + scoreSTD)
@@ -514,10 +786,19 @@ def processTLSTM(modelName, balancedWeight='None', embedding='None', char=False,
     print(f1 + ' ' + f1STD)
 
 
-def processPOSLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
-    resultName = 'result/J-POSLSTM_' + modelName + '_' + balancedWeight
-    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, \
-    hourList_train, hourList_val, posList_train, posList_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadData(modelName, char, embedding, pos=True, dev=dev)
+def processPOSRNN(modelName, RNN='LSTM', balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
+    if RNN == 'LSTM':
+        resultName = 'result/J-POS_LSTM_' + modelName + '_' + balancedWeight
+    elif RNN == 'GRU':
+        resultName = 'result/J-POS_GRU_' + modelName + '_' + balancedWeight
+    if 'yelp' in modelName:
+        ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, dayList_train, dayList_val, hourList_train, hourList_val, posList_train, posList_val, textVector_train, textVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadYelpData(modelName, char, embedding, pos=True)
+        textLength = yelpLength
+        posEmbLength = yelpLength
+    else:
+        ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, hourList_train, hourList_val, posList_train, posList_val, textVector_train, textVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadData(modelName, char, embedding, pos=True, dev=dev)
+        textLength = tweetLength
+        posEmbLength = tweetLength
 
     labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
 
@@ -539,45 +820,52 @@ def processPOSLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
         verbose = 0
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_text = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
-        embedding_tweet = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_tweet)
+        embedding_text = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_text)
     else:
-        embedding_tweet = Embedding(vocabSize, embeddingVectorLength)(input_tweet)
-    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
+        embedding_text = Embedding(vocabSize, embeddingVectorLength)(input_text)
+    if RNN == 'LSTM':
+        tweet_rnn = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_text)
+    elif RNN == 'GRU':
+        tweet_rnn = GRU(300, dropout=0.2, recurrent_dropout=0.2)(embedding_text)
 
     input_pos = Input(batch_shape=(batch_size, posEmbLength,))
     embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)(input_pos)
-    pos_lstm = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+    if RNN == 'LSTM':
+        pos_rnn = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+    elif RNN == 'GRU':
+        pos_rnn = GRU(30, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
 
-    comb = concatenate([tweet_lstm, pos_lstm])
+    comb = concatenate([tweet_rnn, pos_rnn])
     output = Dense(labelNum, activation='softmax', name='output')(comb)
-    model = Model(inputs=[input_tweet, input_pos], outputs=output)
+    model = Model(inputs=[input_text, input_pos], outputs=output)
     #print model.summary()
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     if len(labels_train) % batch_size != 0:
-        tweetVector_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+        textVector_train = textVector_train[:-(len(textVector_train) % batch_size)]
         labels_train = labels_train[:-(len(labels_train) % batch_size)]
         posVector_train = posVector_train[:-(len(posVector_train) % batch_size)]
     if len(labels_val) % batch_size != 0:
-        tweetVector_val = tweetVector_val[:-(len(tweetVector_val) % batch_size)]
+        textVector_val = textVector_val[:-(len(textVector_val) % batch_size)]
         labels_val = labels_val[:-(len(labels_val) % batch_size)]
         posVector_val = posVector_val[:-(len(posVector_val) % batch_size)]
-        places_val = places_val[:-(len(places_val) % batch_size)]
         ids_val = ids_val[:-(len(ids_val) % batch_size)]
+        if 'yelp' not in modelName:
+            places_val = places_val[:-(len(places_val) % batch_size)]
 
     labelVector_train = np_utils.to_categorical(labels_train)
     labelVector_val = np_utils.to_categorical(labels_val)
 
     if balancedWeight == 'sample':
         sampleWeight = compute_sample_weight('balanced', labels_train)
-        trainHistory = model.fit([tweetVector_train, posVector_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
+        trainHistory = model.fit([textVector_train, posVector_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
     elif balancedWeight == 'class':
         classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-        trainHistory = model.fit([tweetVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([tweetVector_val, posVector_val], labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+        trainHistory = model.fit([textVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([textVector_val, posVector_val], labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
     else:
-        trainHistory = model.fit([tweetVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([tweetVector_val, posVector_val], labelVector_val), batch_size=batch_size, verbose=verbose)
+        trainHistory = model.fit([textVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([textVector_val, posVector_val], labelVector_val), batch_size=batch_size, verbose=verbose)
 
     accuracyHist = trainHistory.history['val_acc']
     lossHist = trainHistory.history['val_loss']
@@ -588,16 +876,19 @@ def processPOSLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
     tuneFile.write('\n')
     tuneFile.close()
 
-    scores = model.evaluate([tweetVector_val, posVector_val], labelVector_val, batch_size=batch_size, verbose=0)
+    scores = model.evaluate([textVector_val, posVector_val], labelVector_val, batch_size=batch_size, verbose=0)
     print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-    predictions = model.predict([tweetVector_val, posVector_val], batch_size=batch_size)
+    predictions = model.predict([textVector_val, posVector_val], batch_size=batch_size)
     sampleFile = open(resultName + '.sample', 'a')
     predLabels = []
     trueLabel_val = encoder.inverse_transform(labels_val)
     for index, pred in enumerate(predictions):
         predLabel = labelList[pred.tolist().index(max(pred))]
-        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        if 'yelp' in modelName:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + str(trueLabel_val[index]) + '\t' + str(predLabel) + '\n')
+        else:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
         predLabels.append(predLabel)
     sampleFile.close()
     eval.addEval(scores[1], trueLabel_val, predLabels)
@@ -615,10 +906,10 @@ def processPOSLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
-    resultFile.write(score + '\t' + scoreSTD + '\n')
-    resultFile.write(recall + '\t' + recSTD + '\n')
-    resultFile.write(precision + '\t' + preSTD + '\n')
-    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    resultFile.write(score + '\n')
+    resultFile.write(recall + '\n')
+    resultFile.write(precision + '\n')
+    resultFile.write(f1 + '\n\n')
     confusionFile.close()
     resultFile.close()
     print(score + ' ' + scoreSTD)
@@ -627,11 +918,19 @@ def processPOSLSTM(modelName, balancedWeight='None', embedding='None', char=Fals
     print(f1 + ' ' + f1STD)
 
 
-def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
-    resultName = 'result/J-POSTLSTM_' + modelName + '_' + balancedWeight
-    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, \
-    hourList_train, hourList_val, posList_train, posList_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadData(
-        modelName, char, embedding, pos=True, dev=dev)
+def processPOSTRNN(modelName, RNN='LSTM', balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
+    if RNN == 'LSTM':
+        resultName = 'result/J-POST_LSTM_' + modelName + '_' + balancedWeight
+    elif RNN == 'GRU':
+        resultName = 'result/J-POST_GRU_' + modelName + '_' + balancedWeight
+    if 'yelp' in modelName:
+        ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, dayList_train, dayList_val, hourList_train, hourList_val, posList_train, posList_val, textVector_train, textVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadYelpData(modelName, char, embedding, pos=True)
+        textLength = yelpLength
+        posEmbLength = yelpLength
+    else:
+        ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, hourList_train, hourList_val, posList_train, posList_val, textVector_train, textVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadData(modelName, char, embedding, pos=True, dev=dev)
+        textLength = tweetLength
+        posEmbLength = tweetLength
 
     labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
     dayVector_train = to_categorical(dayList_train, num_classes=7)
@@ -657,16 +956,22 @@ def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
         verbose = 0
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_text = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
-        embedding_tweet = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_tweet)
+        embedding_text = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_text)
     else:
-        embedding_tweet = Embedding(vocabSize, embeddingVectorLength)(input_tweet)
-    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
+        embedding_text = Embedding(vocabSize, embeddingVectorLength)(input_text)
+    if RNN == 'LSTM':
+        tweet_rnn = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_text)
+    elif RNN == 'GRU':
+        tweet_rnn = GRU(300, dropout=0.2, recurrent_dropout=0.2)(embedding_text)
 
     input_pos = Input(batch_shape=(batch_size, posEmbLength,))
     embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)(input_pos)
-    pos_lstm = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+    if RNN == 'LSTM':
+        pos_rnn = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+    elif RNN == 'GRU':
+        pos_rnn = GRU(30, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
 
     input_day = Input(batch_shape=(batch_size, 7,))
     #day_dense = Dense(20, activation='relu', name='day')(input_day)
@@ -677,39 +982,40 @@ def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
     hour_embedding = Embedding(20, 1)(input_hour)
     hour = Flatten()(hour_embedding)
     #comb = concatenate([tweet_lstm, day_dense, hour_dense, pos_lstm])
-    comb = concatenate([tweet_lstm, day, hour, pos_lstm])
+    comb = concatenate([tweet_rnn, day, hour, pos_rnn])
 
     output = Dense(labelNum, activation='softmax', name='output')(comb)
-    model = Model(inputs=[input_tweet, input_day, input_hour, input_pos], outputs=output)
+    model = Model(inputs=[input_text, input_day, input_hour, input_pos], outputs=output)
     print model.summary()
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     if len(labels_train) % batch_size != 0:
-        tweetVector_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+        textVector_train = textVector_train[:-(len(textVector_train) % batch_size)]
         labels_train = labels_train[:-(len(labels_train) % batch_size)]
         hourVector_train = hourVector_train[:-(len(hourVector_train) % batch_size)]
         dayVector_train = dayVector_train[:-(len(dayVector_train) % batch_size)]
         posVector_train = posVector_train[:-(len(posVector_train) % batch_size)]
     if len(labels_val) % batch_size != 0:
-        tweetVector_val = tweetVector_val[:-(len(tweetVector_val) % batch_size)]
+        textVector_val = textVector_val[:-(len(textVector_val) % batch_size)]
         labels_val = labels_val[:-(len(labels_val) % batch_size)]
         hourVector_val = hourVector_val[:-(len(hourVector_val) % batch_size)]
         dayVector_val = dayVector_val[:-(len(dayVector_val) % batch_size)]
         posVector_val = posVector_val[:-(len(posVector_val) % batch_size)]
-        places_val = places_val[:-(len(places_val) % batch_size)]
         ids_val = ids_val[:-(len(ids_val) % batch_size)]
+        if 'yelp' not in modelName:
+            places_val = places_val[:-(len(places_val) % batch_size)]
 
     labelVector_train = np_utils.to_categorical(labels_train)
     labelVector_val = np_utils.to_categorical(labels_val)
 
     if balancedWeight == 'sample':
         sampleWeight = compute_sample_weight('balanced', labels_train)
-        trainHistory = model.fit([tweetVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
+        trainHistory = model.fit([textVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, batch_size=batch_size, sample_weight=sampleWeight, verbose=verbose)
     elif balancedWeight == 'class':
         classWeight = compute_class_weight('balanced', np.unique(labels_train), labels_train)
-        trainHistory = model.fit([tweetVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([tweetVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
+        trainHistory = model.fit([textVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([textVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val), batch_size=batch_size, class_weight=classWeight, verbose=verbose)
     else:
-        trainHistory = model.fit([tweetVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([tweetVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val), batch_size=batch_size, verbose=verbose)
+        trainHistory = model.fit([textVector_train, dayVector_train, hourVector_train, posVector_train], labelVector_train, epochs=epochs, validation_data=([textVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val), batch_size=batch_size, verbose=verbose)
 
     accuracyHist = trainHistory.history['val_acc']
     lossHist = trainHistory.history['val_loss']
@@ -720,16 +1026,19 @@ def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
     tuneFile.write('\n')
     tuneFile.close()
 
-    scores = model.evaluate([tweetVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val, batch_size=batch_size, verbose=0)
+    scores = model.evaluate([textVector_val, dayVector_val, hourVector_val, posVector_val], labelVector_val, batch_size=batch_size, verbose=0)
     print("Accuracy: %.2f%%" % (scores[1] * 100))
 
-    predictions = model.predict([tweetVector_val, dayVector_val, hourVector_val, posVector_val], batch_size=batch_size)
+    predictions = model.predict([textVector_val, dayVector_val, hourVector_val, posVector_val], batch_size=batch_size)
     sampleFile = open(resultName + '.sample', 'a')
     predLabels = []
     trueLabel_val = encoder.inverse_transform(labels_val)
     for index, pred in enumerate(predictions):
         predLabel = labelList[pred.tolist().index(max(pred))]
-        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        if 'yelp' in modelName:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + str(trueLabel_val[index]) + '\t' + str(predLabel) + '\n')
+        else:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
         predLabels.append(predLabel)
     sampleFile.close()
     eval.addEval(scores[1], trueLabel_val, predLabels)
@@ -747,10 +1056,10 @@ def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
-    resultFile.write(score + '\t' + scoreSTD + '\n')
-    resultFile.write(recall + '\t' + recSTD + '\n')
-    resultFile.write(precision + '\t' + preSTD + '\n')
-    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    resultFile.write(score + '\n')
+    resultFile.write(recall + '\n')
+    resultFile.write(precision + '\n')
+    resultFile.write(f1 + '\n\n')
     confusionFile.close()
     resultFile.close()
     print(score + ' ' + scoreSTD)
@@ -761,6 +1070,8 @@ def processPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=Fal
 
 def processAttPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=False, epochs=4, dev=False):
     resultName = 'result/J-Att-POSTLSTM_' + modelName + '_' + balancedWeight
+    posEmbLength = tweetLength
+    textLength = tweetLength
     ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, dayList_train, dayList_val, \
     hourList_train, hourList_val, posList_train, posList_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, posVocabSize, embMatrix, word_index = loadData(
         modelName, char, embedding, pos=True, dev=dev)
@@ -789,7 +1100,7 @@ def processAttPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=
         verbose = 0
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_tweet = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
         embedding_tweet = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)(input_tweet)
     else:
@@ -895,11 +1206,18 @@ def processAttPOSTLSTM(modelName, balancedWeight='None', embedding='None', char=
     print(f1 + ' ' + f1STD)
 
 
-def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
-    resultName = 'result/J-HistLSTM_' + modelName + '_' + balancedWeight
-    ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
-    tweetVector_train, tweetVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, embMatrix, word_index = loadHistData(
-        modelName, histName, char, embedding, histNum=histNum, pos=False, dev=dev)
+def processHistRNN(modelName, RNN='LSTM', histName='long1.5', balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
+    if RNN == 'LSTM':
+        resultName = 'result/J-Hist_LSTM_' + modelName + '_' + balancedWeight
+    elif RNN == 'GRU':
+        resultName = 'result/J-Hist_GRU_' + modelName + '_' + balancedWeight
+    if 'yelp' in modelName:
+        ids_train, ids_val, labels_train, labels_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, textVector_train, textVector_val, histTextVectors_train, histTextVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, embMatrix, word_index = loadYelpHistData(
+            modelName, char, embedding, histNum=histNum, pos=False)
+        textLength = yelpLength
+    else:
+        ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, textVector_train, textVector_val, histTextVectors_train, histTextVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, embMatrix, word_index = loadHistData(modelName, histName, char, embedding, histNum=histNum, pos=False, dev=dev)
+        textLength = tweetLength
 
     labelNum = len(np.unique(np.concatenate([labels_train, labels_val])))
     encoder = LabelEncoder()
@@ -919,48 +1237,55 @@ def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None'
     print('training...')
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_tweet = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
         shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
         embedding_tweet = shared_embedding(input_tweet)
     else:
         shared_embedding = Embedding(vocabSize, embeddingVectorLength)
         embedding_tweet = shared_embedding(input_tweet)
-    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
+    if RNN == 'LSTM':
+        tweet_rnn = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
+    elif RNN == 'GRU':
+        tweet_rnn = GRU(300, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
 
-    conList = [tweet_lstm]
+    conList = [tweet_rnn]
     inputList = [input_tweet]
     for i in range(histNum):
-        input_hist = Input(batch_shape=(batch_size, posEmbLength,))
+        input_hist = Input(batch_shape=(batch_size, textLength,))
         embedding_hist = shared_embedding(input_hist)
-        hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
-        conList.append(hist_lstm)
+        if RNN == 'LSTM':
+            hist_rnn = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
+        elif RNN == 'GRU':
+            hist_rnn = GRU(300, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
+        conList.append(hist_rnn)
         inputList.append(input_hist)
 
     comb = concatenate(conList)
     output = Dense(labelNum, activation='softmax', name='output')(comb)
     model = Model(inputs=inputList, outputs=output)
-    print(model.summary())
+    #print(model.summary())
     model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     if len(labels_train) % batch_size != 0:
         labels_train = labels_train[:-(len(labels_train) % batch_size)]
-        tweetVector_train = tweetVector_train[:-(len(tweetVector_train) % batch_size)]
+        textVector_train = textVector_train[:-(len(textVector_train) % batch_size)]
         for i in range(histNum):
-            histTweetVectors_train[i] = histTweetVectors_train[i][:-(len(histTweetVectors_train[i]) % batch_size)]
+            histTextVectors_train[i] = histTextVectors_train[i][:-(len(histTextVectors_train[i]) % batch_size)]
     if len(labels_val) % batch_size != 0:
-        tweetVector_val = tweetVector_val[:-(len(tweetVector_val) % batch_size)]
+        textVector_val = textVector_val[:-(len(textVector_val) % batch_size)]
         for i in range(histNum):
-            histTweetVectors_val[i] = histTweetVectors_val[i][:-(len(histTweetVectors_val[i]) % batch_size)]
+            histTextVectors_val[i] = histTextVectors_val[i][:-(len(histTextVectors_val[i]) % batch_size)]
         labels_val = labels_val[:-(len(labels_val) % batch_size)]
-        places_val = places_val[:-(len(places_val) % batch_size)]
         ids_val = ids_val[:-(len(ids_val) % batch_size)]
+        if 'yelp' not in modelName:
+            places_val = places_val[:-(len(places_val) % batch_size)]
 
-    dataVector_train = [tweetVector_train]
-    dataVector_val = [tweetVector_val]
-    for histVector in histTweetVectors_train:
+    dataVector_train = [textVector_train]
+    dataVector_val = [textVector_val]
+    for histVector in histTextVectors_train:
         dataVector_train.append(histVector)
-    for histVector in histTweetVectors_val:
+    for histVector in histTextVectors_val:
         dataVector_val.append(histVector)
 
     labelVector_train = np_utils.to_categorical(labels_train)
@@ -994,7 +1319,10 @@ def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None'
     trueLabel_val = encoder.inverse_transform(labels_val)
     for index, pred in enumerate(predictions):
         predLabel = labelList[pred.tolist().index(max(pred))]
-        sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
+        if 'yelp' in modelName:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + str(trueLabel_val[index]) + '\t' + str(predLabel) + '\n')
+        else:
+            sampleFile.write(ids_val[index] + '\t' + contents_val[index] + '\t' + trueLabel_val[index] + '\t' + predLabel + '\t' + places_val[index] + '\n')
         predLabels.append(predLabel)
     sampleFile.close()
     eval.addEval(scores[1], trueLabel_val, predLabels)
@@ -1012,10 +1340,10 @@ def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None'
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
-    resultFile.write(score + '\t' + scoreSTD + '\n')
-    resultFile.write(recall + '\t' + recSTD + '\n')
-    resultFile.write(precision + '\t' + preSTD + '\n')
-    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    resultFile.write(score + '\n')
+    resultFile.write(recall + '\n')
+    resultFile.write(precision + '\n')
+    resultFile.write(f1 + '\n\n')
     confusionFile.close()
     resultFile.close()
     print(score + ' ' + scoreSTD)
@@ -1026,6 +1354,7 @@ def processHistLSTM(modelName, histName, balancedWeight='None', embedding='None'
 
 def processAttHistLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
     resultName = 'result/J-Att-HistLSTM_' + modelName + '_' + balancedWeight
+    textLength = tweetLength
     ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
     tweetVector_train, tweetVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, histDayVectors_val, histHourVectors_train, histHourVectors_val, embMatrix, word_index = loadHistData(
         modelName, histName, char, embedding, histNum=histNum, pos=False, dev=dev)
@@ -1048,7 +1377,7 @@ def processAttHistLSTM(modelName, histName, balancedWeight='None', embedding='No
     print('training...')
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_tweet = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
         shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
         embedding_tweet = shared_embedding(input_tweet)
@@ -1062,7 +1391,7 @@ def processAttHistLSTM(modelName, histName, balancedWeight='None', embedding='No
     conList = [tweet_last_timestep]
     inputList = [input_tweet]
     for i in range(histNum):
-        input_hist = Input(batch_shape=(batch_size, posEmbLength,))
+        input_hist = Input(batch_shape=(batch_size, textLength,))
         embedding_hist = shared_embedding(input_hist)
         hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_hist)
         hist_self_attention = SeqSelfAttention(attention_activation='sigmoid')(hist_lstm)
@@ -1160,6 +1489,7 @@ def processAttHistLSTM(modelName, histName, balancedWeight='None', embedding='No
 def processHistLSTM_period(modelName, balancedWeight='None', embedding='None', periodNum=5, epochs=4, tune=False):
     print('Loading...')
     resultName = 'result/J-HistLSTM_period_' + modelName + '_' + balancedWeight
+    textLength = tweetLength
     emptyVector = []
     for i in range(tweetLength):
         emptyVector.append(0)
@@ -1216,14 +1546,14 @@ def processHistLSTM_period(modelName, balancedWeight='None', embedding='None', p
     tk.fit_on_texts(totalContents)
 
     tweetSequences = tk.texts_to_sequences(contents)
-    tweetVector = sequence.pad_sequences(tweetSequences, maxlen=tweetLength, truncating='post', padding='post')
+    tweetVector = sequence.pad_sequences(tweetSequences, maxlen=textLength, truncating='post', padding='post')
     print tweetVector.shape
     histVector = []
     for tempData in histData:
         tweetSequences = tk.texts_to_sequences(tempData)
-        histTweetVectors = sequence.pad_sequences(tweetSequences, maxlen=tweetLength, truncating='post', padding='post')
+        histTweetVectors = sequence.pad_sequences(tweetSequences, maxlen=textLength, truncating='post', padding='post')
         if len(histTweetVectors) == 0:
-            histTweetVectors = np.zeros((maxHistNum, tweetLength))
+            histTweetVectors = np.zeros((maxHistNum, textLength))
         elif len(histTweetVectors) < maxHistNum:
             for i in range(maxHistNum-len(histTweetVectors)):
                 histTweetVectors = np.append(histTweetVectors, [emptyVector], axis=0)
@@ -1269,7 +1599,7 @@ def processHistLSTM_period(modelName, balancedWeight='None', embedding='None', p
     eval = evaluation.evalMetrics(labelNum)
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     for fold, (train_index, test_index) in enumerate(skf.split(tweetVector, labels)):
-        input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+        input_tweet = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
         if embedding in ['glove', 'word2vec']:
             shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
             embedding_tweet = shared_embedding(input_tweet)
@@ -1281,7 +1611,7 @@ def processHistLSTM_period(modelName, balancedWeight='None', embedding='None', p
         conList = [tweet_lstm]
         inputList = [input_tweet]
         for i in range(maxHistNum):
-            input_hist = Input(batch_shape=(batch_size, tweetLength,))
+            input_hist = Input(batch_shape=(batch_size, textLength,))
             embedding_hist = shared_embedding(input_hist)
             hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
             conList.append(hist_lstm)
@@ -1389,8 +1719,13 @@ def processHistLSTM_period(modelName, balancedWeight='None', embedding='None', p
         print(f1 + ' ' + f1STD)
 
 
-def processHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
-    resultName = 'result/J-HistPOSTLSTM_' + modelName + '_' + balancedWeight
+def processHistPOSTRNN(modelName, RNN='LSTM', histName='long1.5', balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
+    if RNN == 'LSTM':
+        resultName = 'result/J-HistPOST_LSTM_' + modelName + '_' + balancedWeight
+    elif RNN == 'GRU':
+        resultName = 'result/J-HistPOST_GRU_' + modelName + '_' + balancedWeight
+    textLength = tweetLength
+    posEmbLength = tweetLength
     ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
     poss_train, poss_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, \
     histDayVectors_val, histHourVectors_train, histHourVectors_val, histPOSVectors_train, histPOSVectors_val, posVocabSize, embMatrix, word_index = loadHistData(
@@ -1426,19 +1761,25 @@ def processHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='N
     print('training...')
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_tweet = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
         shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
         embedding_tweet = shared_embedding(input_tweet)
     else:
         shared_embedding = Embedding(vocabSize, embeddingVectorLength)
         embedding_tweet = shared_embedding(input_tweet)
-    tweet_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
+    if RNN == 'LSTM':
+        tweet_rnn = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
+    elif RNN == 'GRU':
+        tweet_rnn = GRU(300, dropout=0.2, recurrent_dropout=0.2)(embedding_tweet)
 
     input_pos = Input(batch_shape=(batch_size, posEmbLength,), name='pos_input')
     shared_embedding_pos = Embedding(posVocabSize, embeddingPOSVectorLength)
     embedding_pos = shared_embedding_pos(input_pos)
-    pos_lstm = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+    if RNN == 'LSTM':
+        pos_rnn = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+    elif RNN == 'GRU':
+        pos_rnn = GRU(30, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
     input_day = Input(batch_shape=(batch_size, 7,), name='day_input')
     shared_day_embedding = Embedding(20, 1)
     day_embedding = shared_day_embedding(input_day)
@@ -1448,15 +1789,21 @@ def processHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='N
     hour_embedding = shared_hour_embedding(input_hour)
     hour = Flatten()(hour_embedding)
 
-    comb = [tweet_lstm, pos_lstm, day, hour]
+    comb = [tweet_rnn, pos_rnn, day, hour]
     inputList = [input_tweet, input_pos, input_day, input_hour]
     for i in range(histNum):
-        input_hist = Input(batch_shape=(batch_size, tweetLength,), name='hist_tweet_input_'+str(i))
+        input_hist = Input(batch_shape=(batch_size, textLength,), name='hist_tweet_input_' + str(i))
         embedding_hist = shared_embedding(input_hist)
-        hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
+        if RNN == 'LSTM':
+            hist_rnn = LSTM(200, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
+        elif RNN == 'GRU':
+            hist_rnn = GRU(300, dropout=0.2, recurrent_dropout=0.2)(embedding_hist)
         input_pos = Input(batch_shape=(batch_size, posEmbLength,), name='pos_tweet_input_'+str(i))
         embedding_pos = shared_embedding_pos(input_pos)
-        pos_lstm = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+        if RNN == 'LSTM':
+            pos_rnn = LSTM(20, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
+        elif RNN == 'GRU':
+            pos_rnn = GRU(30, dropout=0.2, recurrent_dropout=0.2)(embedding_pos)
         input_day = Input(batch_shape=(batch_size, 7,), name='day_tweet_input_'+str(i))
         input_hour = Input(batch_shape=(batch_size, 4,), name='hour_tweet_input_'+str(i))
         day_embedding = shared_day_embedding(input_day)
@@ -1464,7 +1811,7 @@ def processHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='N
         day = Flatten()(day_embedding)
         hour = Flatten()(hour_embedding)
 
-        comb += [hist_lstm, pos_lstm, day, hour]
+        comb += [hist_rnn, pos_rnn, day, hour]
         inputList += [input_hist, input_pos, input_day, input_hour]
 
     comb = concatenate(comb)
@@ -1553,20 +1900,22 @@ def processHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='N
             lineOut += str(line) + '\t'
         confusionFile.write(lineOut.strip() + '\n')
     confusionFile.write('\n')
-    resultFile.write(score + '\t' + scoreSTD + '\n')
-    resultFile.write(recall + '\t' + recSTD + '\n')
-    resultFile.write(precision + '\t' + preSTD + '\n')
-    resultFile.write(f1 + '\t' + f1STD + '\n\n')
+    resultFile.write(score + '\n')
+    resultFile.write(recall + '\n')
+    resultFile.write(precision + '\n')
+    resultFile.write(f1 + '\n\n')
     confusionFile.close()
     resultFile.close()
-    print(score + ' ' + scoreSTD)
-    print(recall + ' ' + recSTD)
-    print(precision + ' ' + preSTD)
-    print(f1 + ' ' + f1STD)
+    print(score)
+    print(recall)
+    print(precision)
+    print(f1)
 
 
 def processAttHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding='None', char=False, histNum=1, epochs=7, dev=False):
     resultName = 'result/J-Att-HistPOSTLSTM_' + modelName + '_' + balancedWeight
+    textLength = tweetLength
+    posEmbLength = tweetLength
     ids_train, ids_val, labels_train, labels_val, places_train, places_val, contents_train, contents_val, days_train, days_val, hours_train, hours_val, \
     poss_train, poss_val, tweetVector_train, tweetVector_val, posVector_train, posVector_val, histTweetVectors_train, histTweetVectors_val, histDayVectors_train, \
     histDayVectors_val, histHourVectors_train, histHourVectors_val, histPOSVectors_train, histPOSVectors_val, posVocabSize, embMatrix, word_index = loadHistData(
@@ -1602,7 +1951,7 @@ def processAttHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding
     print('training...')
     eval = evaluation.evalMetrics(labelNum)
 
-    input_tweet = Input(batch_shape=(batch_size, tweetLength,), name='tweet_input')
+    input_tweet = Input(batch_shape=(batch_size, textLength,), name='tweet_input')
     if embedding in ['glove', 'word2vec']:
         shared_embedding = Embedding(len(word_index) + 1, 200, weights=[embMatrix], trainable=True)
         embedding_tweet = shared_embedding(input_tweet)
@@ -1632,7 +1981,7 @@ def processAttHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding
     comb = [tweet_last_timestep, pos_last_timestep, day, hour]
     inputList = [input_tweet, input_pos, input_day, input_hour]
     for i in range(histNum):
-        input_hist = Input(batch_shape=(batch_size, tweetLength,), name='hist_tweet_input_'+str(i))
+        input_hist = Input(batch_shape=(batch_size, textLength,), name='hist_tweet_input_' + str(i))
         embedding_hist = shared_embedding(input_hist)
         hist_lstm = LSTM(200, dropout=0.2, recurrent_dropout=0.2, return_sequences=True)(embedding_hist)
         hist_self_attention = SeqSelfAttention(attention_activation='sigmoid')(hist_lstm)
@@ -1754,24 +2103,13 @@ def processAttHistPOSTLSTM(modelName, histName, balancedWeight='None', embedding
 
 if __name__ == "__main__":
     modelName = 'long1.5'
+    #modelName = 'yelpUserReview'
     histName = 'long1.5'
     embModel = 'glove'
-    processTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
-    #processTLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
 
-    #processPOSLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
-    #processPOSLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
-
-    processPOSTLSTM(modelName, 'none', embModel, char=False, epochs=20, dev=True)
-    #processPOSTLSTM(modelName, 'class', embModel, char=False, epochs=6, dev=False)
-    #processAttPOSTLSTM(modelName, 'class', embModel, char=False, epochs=4, dev=False)
-
-    #processHistLSTM(modelName, histName, 'none', 'glove', char=False, histNum=histNum, epochs=20, dev=True)
-    #processHistLSTM(modelName, histName, 'class', 'glove', char=False, histNum=5, epochs=9, dev=True)
-    #processAttHistLSTM(modelName, histName, 'class', 'glove', char=False, histNum=5, epochs=26, dev=False)
-
-    #processAttHistPOSTLSTM('long1.5', 'long1.5', 'class', 'glove', char=False, histNum=5, epochs=13, dev=False)
-
-    #for num in [3]:
-    #    processHistLSTM_period('long1.5', 'class', 'glove', periodNum=num, epochs=12, tune=False)
-    #processHistLSTM_period('long1.5', 'class', 'glove', periodNum=num, epochs=20, tune=True)
+    #processTRNN(modelName, RNN='GRU', balancedWeight='class', embedding=embModel, char=False, epochs=6, dev=False)
+    #processPOSRNN(modelName, RNN='GRU', balancedWeight='class', embedding=embModel, char=False, epochs=4, dev=False)
+    #processPOSTRNN(modelName, RNN='GRU', balancedWeight='class', embedding=embModel, char=False, epochs=4, dev=False)
+    for histNum in [5]:
+        #processHistRNN(modelName, RNN='GRU', histName=histName, balancedWeight='class', embedding=embModel, char=False, histNum=histNum, epochs=30, dev=False)
+        processHistPOSTRNN(modelName, RNN='GRU', histName=histName, balancedWeight='class', embedding=embModel, char=False, histNum=histNum, epochs=25, dev=False)
