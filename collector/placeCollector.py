@@ -35,12 +35,12 @@ def TwitterPlaceCollector():
     placeIDSet = set()
     recordFile = open('places.json', 'w')
     for place in placeList:
-        print 'extracting data for: ' + place
+        print('extracting data for: ' + place)
         for i in range(10):
             try:
                 requestNum += 1
                 if requestNum > requestLimit:
-                    print 'Wait for 15 mins...'
+                    print('Wait for 15 mins...')
                     time.sleep(900)
                     requestNum = 1
                 response = twitter_api.geo.search(query=place, granularity='poi')
@@ -54,7 +54,7 @@ def TwitterPlaceCollector():
                         temp['place_type'] = data['place_type']
                         recordFile.write(json.dumps(temp) + '\n')
             except Exception as e:
-                print 'API Error: ' + str(e)
+                print('API Error: ' + str(e))
                 continue
     recordFile.close()
 
@@ -70,7 +70,7 @@ def TomTomPlaceCollector():
     placeIDSet = set()
     recordFile = open('tomtom_category_places.json', 'a')
     for place in placeList:
-        print 'Collecting [' + place + ']'
+        print('Collecting [' + place + ']')
         for i in range(20):
             offset = 100 * i
             serviceURL = 'https://api.tomtom.com/search/2/categorySearch/' + place + '.JSON' + '?limit=100&countrySet=US&ofs=' + str(offset) + '&key=' + key
@@ -109,20 +109,20 @@ def GooglePlaceCollector():
     requestNum = 0
     for category in categoryList:
         placeIDSet = set()
-        print 'Collecting: ' + category
+        print('Collecting: ' + category)
         nextPageTokens = []
         outputFile = open('data/google_places3/'+category+'.place', 'w')
         for q in qList:
             requestNum += 1
             if requestNum > requestLimit:
-                print 'wait for 24 hours'
+                print('wait for 24 hours')
                 time.sleep(86400)
                 requestNum = 1
             url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + '&language=en&query=' + q + '&type=' + category
             try:
                 response = requests.get(url, verify=False)
             except Exception as e:
-                print 'Error: ' + str(e)
+                print('Error: ' + str(e))
                 continue
             data = json.loads(response.text)
             if 'next_page_token' in data:
@@ -144,14 +144,14 @@ def GooglePlaceCollector():
             for token in nextPageTokens:
                 requestNum += 1
                 if requestNum > requestLimit:
-                    print 'wait for 24 hours'
+                    print('wait for 24 hours')
                     time.sleep(86400)
                     requestNum = 1
                 url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + 'pagetoken=' + token
                 try:
                     response = requests.get(url, verify=False)
                 except Exception as e:
-                    print 'Error: ' + str(e)
+                    print('Error: ' + str(e))
                     continue
                 data = json.loads(response.text)
                 if 'next_page_token' in data:
@@ -172,14 +172,14 @@ def GooglePlaceCollector():
             for token in furtherTokenList:
                 requestNum += 1
                 if requestNum > requestLimit:
-                    print 'wait for 25 hours'
+                    print('wait for 25 hours')
                     time.sleep(86400)
                     requestNum = 1
                 url = 'https://maps.googleapis.com/maps/api/place/textsearch/json?key=' + key + 'pagetoken=' + token
                 try:
                     response = requests.get(url, verify=False)
                 except Exception as e:
-                    print 'Error: ' + str(e)
+                    print('Error: ' + str(e))
                     continue
                 data = json.loads(response.text)
                 for item in data['results']:

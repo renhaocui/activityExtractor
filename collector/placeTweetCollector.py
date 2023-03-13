@@ -47,18 +47,18 @@ def tomtomTweetCollector():
 
     for category in placeData:
         tweetIDSet = set()
-        print 'Collecting for ['+category+']'
+        print('Collecting for ['+category+']')
         outFile = open('data/' + category + '.json', 'w')
         for id in placeData[category]:
             requestNum += 1
             if requestNum > requestLimit:
-                print 'Wait for 15 mins...'
+                print('Wait for 15 mins...')
                 time.sleep(900)
                 requestNum = 1
             try:
                 response = twitter_api.search.tweets(q=' ', geocode=str(placeData[category][id]['lat'])+','+str(placeData[category][id]['lon'])+','+'0.1mi', count=100, result_type='mixed', lang='en')
             except Exception as e:
-                print 'Error ' + str(e)
+                print('Error ' + str(e))
                 continue
             for tweet in response['statuses']:
                 if tweet['id'] not in tweetIDSet:
@@ -86,9 +86,9 @@ def googleTweetCollector(occurrence):
     twitter_api = oauth_login()
     tweetIDSet = set()
     for i in range(occurrence):
-        print 'Round '+str(i)
+        print('Round '+str(i))
         for file in os.listdir("data/google_places3"):
-            print 'Collecting: '+file.split('.')[0]
+            print('Collecting: '+file.split('.')[0])
             placeData = {}
             inputFile = open('data/google_places3/'+file, 'r')
             for line in inputFile:
@@ -105,14 +105,14 @@ def googleTweetCollector(occurrence):
             for id in placeData:
                 requestNum += 1
                 if requestNum > requestLimit:
-                    print 'Wait for 15 mins...'
+                    print('Wait for 15 mins...')
                     time.sleep(900)
                     requestNum = 1
                 try:
                     response = twitter_api.search.tweets(q=' ', geocode=str(placeData[id]['lat']) + ',' + str(placeData[id]['lon']) + ',' + '0.01km', count=100, result_type='mixed',
                                                          lang='en')
                 except Exception as e:
-                    print 'Error ' + str(e)
+                    print('Error ' + str(e))
                     continue
                 for tweet in response['statuses']:
                     if tweet['id'] not in tweetIDSet:
@@ -130,10 +130,8 @@ def googleTweetCollector(occurrence):
                         temp['user_description'] = tweet['user']['description']
                         outputFile.write(json.dumps(temp) + '\n')
             outputFile.close()
-        print 'Wait for 1 hour...'
+        print('Wait for 1 hour...')
         time.sleep(3600)
-
-
 
 
 if __name__ == '__main__':
